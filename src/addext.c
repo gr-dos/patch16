@@ -1,5 +1,6 @@
 /* addext.c -- add an extension to a file name
    Copyright (C) 1990, 1997 Free Software Foundation, Inc.
+   Copyright 2026 patch16 contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -40,7 +41,11 @@
 #endif
 
 /* Append to FILENAME the extension EXT, unless the result would be too long,
-   in which case just append the character E.  */
+   in which case just append the character E.
+
+   patch16: on DOS an extension that begins with a dot replaces the
+   name's own (FOO.C with .ORG is FOO.ORG), since an 8.3 name has room
+   for one; E is not needed.  Any other EXT is appended.  */
 
 void
 addext (filename, ext, e)
@@ -49,41 +54,10 @@ addext (filename, ext, e)
      int e;
 {
   char *s = base_name (filename);
-  size_t slen = strlen (s), extlen = strlen (ext);
-  long slen_max = -1;
+  char *dot = strrchr (s, '.');
 
-#if HAVE_PATHCONF && defined _PC_NAME_MAX
-#ifndef _POSIX_NAME_MAX
-#define _POSIX_NAME_MAX 14
-#endif
-  if (slen + extlen <= _POSIX_NAME_MAX)
-    /* The file name is so short there's no need to call pathconf.  */
-    slen_max = _POSIX_NAME_MAX;
-  else if (s == filename)
-    slen_max = pathconf (".", _PC_NAME_MAX);
-  else
-    {
-      char c = *s;
-      *s = 0;
-      slen_max = pathconf (filename, _PC_NAME_MAX);
-      *s = c;
-    }
-#endif
-  if (slen_max < 0)
-    slen_max = HAVE_LONG_FILE_NAMES ? 255 : 14;
-
-  if (slen + extlen <= slen_max)
-    strcpy (s + slen, ext);
-  else
-    {
-      if (slen_max <= slen) {
-	/* Try to preserve difference between .h .c etc.  */
-	if (slen == slen_max && s[slen - 2] == '.')
-	  s[slen - 2] = s[slen - 1];
-
-	slen = slen_max - 1;
-      }
-      s[slen] = e;
-      s[slen + 1] = 0;
-    }
+  (void) e;
+  if (*ext == '.' && dot)
+    *dot = 0;
+  strcat (s, ext);
 }

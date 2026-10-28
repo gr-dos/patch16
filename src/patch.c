@@ -5,6 +5,7 @@
 /*
 Copyright 1984, 1985, 1986, 1987, 1988 Larry Wall
 Copyright 1989, 1990, 1991, 1992, 1993, 1997 Free Software Foundation, Inc.
+Copyright 2026 patch16 contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -342,11 +343,17 @@ char **argv;
 		if (!rejname) {
 		    rej = xmalloc (strlen (outname) + 5);
 		    strcpy (rej, outname);
-		    addext (rej, ".rej", '#');
+		    addext (rej, ".REJ", '#');
+		}
+		/* patch16: a reject name made here takes the next free
+		   name (FOO.REJ, FOO.RE1, ...) rather than replace a file. */
+		if (! dry_run) {
+		    if (rejname)
+			move_file (TMPREJNAME, rej, FALSE);
+		    else
+			p16_move_new (TMPREJNAME, rej);
 		}
 		say ("--saving rejects to %s", rej);
-		if (! dry_run)
-		    move_file (TMPREJNAME, rej, FALSE);
 		if (!rejname)
 		    free (rej);
 	    }
@@ -938,7 +945,7 @@ static void
 init_output(name)
      char const *name;
 {
-    ofp = fopen(name, "w");
+    ofp = fopen(name, "wb");
     if (! ofp)
 	pfatal ("can't create %s", name);
 }
@@ -949,7 +956,7 @@ static void
 init_reject(name)
      char const *name;
 {
-    rejfp = fopen(name, "w");
+    rejfp = fopen(name, "wb");
     if (!rejfp)
 	pfatal ("can't create %s", name);
 }
@@ -1120,6 +1127,7 @@ fatal_exit (sig)
 static void
 cleanup ()
 {
+  p16_restore ();
   unlink (TMPINNAME);
   unlink (TMPOUTNAME);
   unlink (TMPPATNAME);

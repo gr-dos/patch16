@@ -5,6 +5,7 @@
 /*
 Copyright 1986 Larry Wall
 Copyright 1992, 1993, 1997 Free Software Foundation, Inc.
+Copyright 2026 patch16 contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -58,14 +59,11 @@ move_file (from, to, backup)
      char const *from, *to;
      int backup;
 {
-  register char *s;
-  register char *bakname;
-  struct stat tost, bakst;
+  char *bakname = 0;
+  struct stat tost;
 
   if (backup && stat (to, &tost) == 0)
     {
-      char *simplename;
-
       if (origprae || origbase)
 	{
 	  char const *p = origprae ? origprae : "";
@@ -87,49 +85,14 @@ move_file (from, to, backup)
 	  if (!bakname)
 	    memory_fatal ();
 	}
-
-      simplename = base_name (bakname);
-      /* Find a backup name that is not the same file.
-	 Change the first lowercase char into uppercase;
-	 if that doesn't suffice, chop off the first char and try again.  */
-      while (stat (bakname, &bakst) == 0
-	     && tost.st_dev == bakst.st_dev
-	     && tost.st_ino == bakst.st_ino)
-	{
-	  /* Skip initial non-lowercase chars.  */
-	  for (s=simplename; *s && !ISLOWER ((unsigned char) *s); s++)
-	    continue;
-	  if (*s)
-	    *s = toupper ((unsigned char) *s);
-	  else
-	    remove_prefix (simplename, 1);
-	}
-      if (debug & 4)
-	  say ("Moving %s to %s.\n", to, bakname);
-      if (rename (to, bakname) != 0)
-	pfatal ("Can't rename `%s' to `%s'", to, bakname);
-      free (bakname);
     }
 
-  if (debug & 4)
-    say ("Moving %s to %s.\n", from, to);
-
-  if (rename (from, to) != 0)
-    {
-#ifdef EXDEV
-      if (errno == EXDEV)
-	{
-	  if (! backup && unlink (to) != 0
-	      && errno != ENOENT && errno != ENOTDIR)
-	    pfatal ("Can't remove `%s'", to);
-	  copy_file (from, to);
-	  if (unlink (from) != 0)
-	    pfatal ("Can't remove `%s'", from);
-	  return;
-	}
-#endif
-      pfatal ("Can't rename `%s' to `%s'", from, to);
-    }
+  /* patch16: DOS cannot rename over a file, and with st_ino always 0
+     GNU patch's search for a backup name that is not TO never ended;
+     compat/install.c finds a free backup name and keeps the original
+     until the new file is in place. */
+  p16_move_file (from, to, bakname);
+  free (bakname);
 }
 
 /* Copy a file. */
@@ -140,7 +103,7 @@ copy_file(from,to)
      char const *to;
 {
   int tofd;
-  int fromfd = open (from, O_RDONLY);
+  int fromfd = open (from, O_RDONLY | O_BINARY);
   long i;
 
   if (fromfd < 0)

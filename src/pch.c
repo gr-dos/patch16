@@ -5,6 +5,7 @@
 /*
 Copyright 1986, 1987, 1988 Larry Wall
 Copyright 1990, 1991, 1992, 1993, 1997 Free Software Foundation, Inc.
+Copyright 2026 patch16 contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -90,6 +91,7 @@ open_patch_file(filename)
     struct stat st;
     if (!filename || !*filename || strEQ (filename, "-"))
       {
+	setmode (STDIN_FILENO, O_BINARY);	/* patch16 */
 	if (fstat (STDIN_FILENO, &st) != 0)
 	  pfatal ("fstat");
 	if (S_ISREG (st.st_mode))
@@ -101,7 +103,7 @@ open_patch_file(filename)
 	else
 	  {
 	    size_t charsread;
-	    pfp = fopen (TMPPATNAME, "w");
+	    pfp = fopen (TMPPATNAME, "wb");
 	    if (!pfp)
 	      pfatal ("can't create %s", TMPPATNAME);
 	    while ((charsread = fread (buf, 1, bufsize, stdin)) != 0)
@@ -115,7 +117,7 @@ open_patch_file(filename)
 	  }
       }
     if (filename) {
-	pfp = fopen (filename, "r");
+	pfp = fopen (filename, "rb");
 	if (!pfp)
 	  pfatal ("patch file %s not found", filename);
 	if (fstat (fileno (pfp), &st) != 0)
@@ -1520,7 +1522,7 @@ do_ed_script (ofp)
 
     if (ofp)
       {
-	FILE *ifp = fopen (TMPOUTNAME, "r");
+	FILE *ifp = fopen (TMPOUTNAME, "rb");
 	int c;
 	if (!ifp)
 	  pfatal (TMPOUTNAME);

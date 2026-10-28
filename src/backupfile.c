@@ -1,5 +1,6 @@
 /* backupfile.c -- make Emacs style backup file names
    Copyright (C) 1990,1991,1992,1993,1995,1997 Free Software Foundation, Inc.
+   Copyright 2026 patch16 contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -96,7 +97,8 @@ enum backup_type backup_type = none;
 
 /* The extension added to file names to produce a simple (as opposed
    to numbered) backup file name. */
-char const *simple_backup_suffix = ".orig";
+/* patch16: FOO.C is backed up as FOO.ORG (addext.c).  */
+char const *simple_backup_suffix = ".ORG";
 
 static int max_backup_version __BACKUPFILE_P ((char const *, char const *));
 static int version_number __BACKUPFILE_P ((char const *, char const *, size_t));

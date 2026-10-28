@@ -5,6 +5,7 @@
 /*
 Copyright 1986, 1988 Larry Wall
 Copyright 1991, 1992, 1993, 1997 Free Software Foundation, Inc.
+Copyright 2026 patch16 contributors
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -291,7 +292,7 @@ plan_a(filename)
      During dry runs, empty files may not actually exist.  */
   if (size)
     {
-      int ifd = open (filename, O_RDONLY);
+      int ifd = open (filename, O_RDONLY | O_BINARY);
       if (ifd < 0)
 	pfatal ("can't open file %s", filename);
       if (read (ifd, buffer, size) != size)
@@ -365,7 +366,7 @@ plan_b(filename)
 
   if (dry_run)
     filename = "/dev/null";
-  if (! (ifp = fopen (filename, "r")))
+  if (! (ifp = fopen (filename, "rb")))
     pfatal ("can't open file %s", filename);
   tifd = creat (TMPINNAME, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
   if (tifd < 0)
@@ -450,7 +451,7 @@ plan_b(filename)
   input_lines = line - 1;
   if (close (tifd) != 0)
     write_fatal ();
-  if ((tifd = open (TMPINNAME, O_RDONLY)) < 0)
+  if ((tifd = open (TMPINNAME, O_RDONLY | O_BINARY)) < 0)
     pfatal ("can't reopen file %s", TMPINNAME);
 }
 
