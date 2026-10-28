@@ -1,166 +1,206 @@
 # patch16: port feasibility (E1)
 
-**Status:** E1 exploration done 2026-10-28; local and unpublished (the license gate is open, LICENSE-RESEARCH.md §5)
-**Inputs:** Wall's patch 2.0 pl12 (`scripts/fetch-upstream`); `libc16` 0.04 built from `../libc16`; the Open Watcom snapshot `libc16` pins (`watcom-2026-10-01-Build`)
+**Status:** E1 exploration done 2026-10-28, for the **GNU `patch` 2.2** baseline (LICENSE-RESEARCH.md §8). Appendix A keeps the earlier findings for Wall's 1988 code.
+**Inputs:** GNU `patch` 2.2 (`scripts/fetch-upstream`); `libc16` 0.04 built from `../libc16`; the Open Watcom snapshot `libc16` pins (`watcom-2026-10-01-Build`)
 
 ## 1. Summary
 
-- **Viable.** Wall's code is about 2,650 lines of K&R C in five files. Four of the five compile **unmodified** with `wcc -0 -ms` and `-mc` against `libc16`'s headers. The fifth, `util.c`, fails only on its pre-varargs message functions and on `signal`.
-- Code is small: 18.4 KB of `_TEXT` for the four files in the small model (22.9 KB compact), before `util.c` and library members. A complete `.EXE` well under 64 KB of code is realistic, so the small or compact model is viable. No large-model need appeared.
-- **The real porting work is in four places, not the matcher:**
-  1. 16-bit size arithmetic in `inp.c`'s in-memory "plan A" and `pch.c`'s hunk arrays. Both can overrun the heap, the latter from a single malformed hunk header (§4).
-  2. `inp.c`'s on-disk "plan B" uses fixed-width records.
-  3. Byte-at-a-time output on `libc16`'s unbuffered streams.
-  4. The `printf` family (139 call sites).
-- **`libc16` gaps** are small and mostly DOS-generic: `rename`, `unlink`/`remove`, and `fseek`/`ftell`, which suit `libc16`. Unique temp files, an output buffer and message output suit `patch16`'s `compat/` instead (§5).
-- **Interface conflicts with DESIGN.md §5** need a decision before E2 (§7): Wall's `-n` is "normal diff", not dry run; his exit status is a failure count; fuzz defaults to 2.
+- **Viable.** All 13 C files that 2.2 builds compile with `wcc -0 -ms` and `-mc` against `libc16`'s headers. The only additions are a hand-written `config.h`, a generated `patchlevel.h`, and stub `<assert.h>`/`<signal.h>`; no source edits were needed.
+- **Size:** 28.4 KB of `_TEXT` (small) or 35.7 KB (compact), plus about 10 KB of static `DGROUP` and a 2 KB stack, before library members. **Compact** is the chosen model (decision 9); measure again after the line-index work.
+- **2.2 already does** what several decisions ask for:
+  - `-n` is `--normal` and `--dry-run` exists (decision 1);
+  - exit status is 0/1/2 (decision 2);
+  - no `-p` means strip to the basename (decision 4);
+  - unified diffs are supported;
+  - plan A's size arithmetic is overflow-checked.
+- **Still to do:**
+  1. 16-bit `size_t` overflows in hunk-array growth and in plan B. Hostile input can trigger both (§4).
+  2. Plan A is limited to files of about 13 KB in the compact model, so plan B, which uses fixed-width records, carries real workloads.
+  3. Binary-mode I/O and CRLF/`^Z` policy.
+  4. `\ No newline at end of file`, which 2.2 does not handle.
+  5. DOS temp files and safe installation.
+  6. A narrow local formatter (decision 7).
+- **`libc16` additions:** `rename`, `unlink`/`remove`, `fseek`/`ftell` (decision 8). Everything else is `patch16`-local.
 
 ## 2. Build experiment
 
-The test copied Wall's `.c` and `.h` files unmodified into a scratch directory (not this repository) and compiled them as below. `malloc.c` was left out (LICENSE-RESEARCH.md §3.1). The fixed `config.h` was hand-written: `index`→`strchr`, `rindex`→`strrchr`, and the `Reg*` register macros. `<assert.h>` and `<signal.h>`, which `libc16` lacks, were empty stubs.
+The test copied the 2.2 files to a scratch directory (not this repository) and compiled each with:
 
 ```sh
-wcc -q -zl -zld -x -m{s,c} -0 -os -s -bt=dos -w3 -Istub -I$LIBC16/include FILE.c
+wcc -q -zl -zld -x -m{s,c} -0 -os -s -bt=dos -w1 -DHAVE_CONFIG_H -I. -Istub -I$LIBC16/include FILE.c
 ```
 
-| File | `-ms` | `-mc` | Notes |
-|---|---|---|---|
-| `patch.c` | compiles | compiles | K&R warnings only (W308/W131) |
-| `pch.c` | compiles | compiles | same |
-| `inp.c` | compiles | compiles | same |
-| `version.c` | compiles | compiles | |
-| `util.c` | 47 errors | 47 errors | 39 × E1071: `say`/`fatal`/`ask` are defined with `long` parameters (the non-`CANVARARG` path) but called with `char *`. 8 × undeclared `SIGHUP`/`SIGINT`/`SIG_IGN`. |
-
-Linking the four objects with `option nodefaultlibs` and `LIBC16{,C}.LIB`:
+`config.h` defines `STDC_HEADERS`, `HAVE_STRING_H`, `HAVE_FCNTL_H`, `HAVE_LIMITS_H`, `HAVE_MKDIR`, `HAVE_MEMCMP`, `HAVE_VPRINTF` and `RETSIGTYPE void`. It also supplies values `libc16` lacks or the Makefile normally passes: `ED_PROGRAM`, `L_tmpnam`, `ENOTDIR`, and `<stddef.h>` for `memchr.c`. `patchlevel.h` (normally generated) is `#define PATCH_VERSION "2.2"`.
 
 | | small | compact |
 |---|---:|---:|
-| `_TEXT` | 0x490A (18,698) | 0x5ADB (23,259) |
-| `CONST`+`CONST2`+`_DATA` | 0xDDF (3,551) | 0xE01 (3,585) |
-| `_BSS` | 0xC06 (3,078) | 0xCB0 (3,248) |
+| files compiled | 12 of 12 (`rename.c` not needed) | 13 of 13 |
+| `_TEXT` | 0x6EC4 (28,356) | 0x8B4B (35,659) |
+| `CONST`+`CONST2`+`_DATA` | 7,807 | 8,055 |
+| `_BSS` | 2,161 | 2,369 |
 
-These are partial figures, without `util.c` and without the library members that would resolve. Static data is dominated by `buf[MAXLINELEN]` (1 KB), `serrbuf[BUFSIZ]` and the fixed name buffers.
+The figures exclude library members. `-mc` costs about 26% more code.
 
-**Every external came back unresolved**, including functions `libc16` has (`strcpy_`, `malloc_`, `open_`, `read_`). Wall never includes `<string.h>`, `<stdlib.h>`, `<io.h>` or `<fcntl.h>`. `common.h` also redeclares `malloc`, `strcpy`, `lseek` and others K&R-style, so the calls get Watcom's register convention (`name_`) instead of `libc16`'s `__cdecl` (`_name`). The port therefore has to include the right headers and delete `common.h`'s libc redeclarations. That is a mechanical change, but a mandatory one; without it, prototypes-off mismatches would also hide argument-size bugs (`int` vs `long`).
+Link with `option nodefaultlibs` and `LIBC16{,C}.LIB`. Undefined symbols come in two kinds:
 
-## 3. Unix dependency inventory
+- **Header problems, not gaps:**
+  - `open`, `read`, `write`, `close`, `lseek`, `chmod`, `getenv`, `mkdir` are called without `libc16`'s `<io.h>`/`<direct.h>`/`<stdlib.h>` prototypes, so they get Watcom's register-convention names (`open_`).
+  - `getopt.c` declares its own `strlen`, `strcmp` and `strncmp` unless `__GNU_LIBRARY__`.
+  - Fix: include the right headers from `config.h`.
+- **Real gaps:**
+  - `atol`, `chdir`, `creat`, `fseek`, `ftell`, `fstat`, `getpid`, `getuid`, `isatty`, `kill`, `link`, `popen`, `pclose`, `setbuf`, `signal`, `system`, `tmpnam`, `unlink`;
+  - the formatted family: `printf`, `fprintf`, `sprintf`, `vfprintf`, `perror`.
 
-Counts are call sites in `patch.c`, `pch.c`, `inp.c`, `util.c` and `version.c`.
+## 3. Unix dependency inventory (2.2)
 
-| API | Sites | Used for | `libc16` 0.04 | Disposition |
-|---|---:|---|---|---|
-| `fprintf`, `sprintf`, `printf` (via `say`/`ask`/`fatal` too) | 13 + 14 + 1, plus 111 | messages, reject-file headers, file names, command strings | **no** (by design) | §6 |
-| `fopen`/`fgets`/`fputs`/`putc`/`fclose`/`fflush` | many | patch file, plan B input, output, reject file | yes | keep; use binary mode (§5) |
-| `ftell` / `fseek` | 7 / 5 | random access to the patch file (`pch.c`: hunk backtracking, `skip_to`) | **no** | add to `libc16` (§5) |
-| `setbuf` | 1 | `stderr` buffering | no | drop (output is unbuffered) |
-| `open`/`read`/`write`/`lseek`/`close`/`creat` | ~30 | plan A load, plan B temp file, `move_file`, `copy_file`, `ask` | yes, except `creat` | `creat` → `open(O_CREAT\|O_TRUNC\|O_WRONLY\|O_BINARY)` |
-| `stat` / `fstat` | 16 / 1 | existence, size, mode, `S_IFDIR` | `stat` only | `fstat` → `filelength` |
-| `chmod` | 4 | copy the original's mode to output | yes | map to DOS attributes; keep read-only out of the temp file |
-| `unlink` | 8 | temp files, backup rotation | **no** | add to `libc16` (INT 21h/41h) |
-| `link` | 2 | `move_file`: back up and install by hard link | **no**, and DOS has no links | replace with rename and copy in `compat/` (§5) |
-| `mktemp` | 4 | `/tmp/patch[oirp]XXXXXX` | **no** | `compat/`: INT 21h/5Ah in the target directory (DOS 3.0) |
-| `signal` | 6 | ignore `SIGHUP`/`SIGINT` while installing; clean up on interrupt | **no** | `compat/`: Ctrl-Break via INT 23h hook, or no-op for v0.01 |
-| `system` | 3 | RCS `co -l`, SCCS `get -e`, `mkdir -p` (`makedirs`) | **no** | drop RCS/SCCS; `makedirs` → `mkdir` loop (`libc16` has `mkdir`) |
-| `popen`/`pclose` | 2 / 1 | `-e` ed-script mode (pipes to `/bin/ed`) | **no** | drop `-e` (no `ed` on DOS) |
-| `isatty` | 4 | `ask()` finds a terminal; `/dev/tty` fallback | **no** | `compat/`: IOCTL INT 21h/4400h, or always use `CON` |
-| `chdir` | 1 | `-d DIR` | **no** | defer `-d` (DESIGN.md §5 already marks it "if feasible") |
-| `abort` / `assert` | 1 / 12 | internal consistency | **no** | `patch16`-local `assert` macro → fatal message, exit 2 |
-| `atol` / `atoi` | 9 / 3 | hunk numbers, `-p`/`-F` arguments | `atoi` only | checked digit accumulation (DESIGN.md §4) |
-| `rindex`/`index` | 3 | path basename | as `strrchr`/`strchr` | `config.h` macro |
-| ctype, `strlen`, `strcpy`, `strcat`, `strncmp`, `malloc`/`realloc`/`free` | many | | yes | keep |
-| `/tmp/...`, `/dev/tty`, `.orig`/`~` backup names | | Unix paths | | `compat/` path rules; 8.3 names (DESIGN.md §7) |
+| API | Where | Used for | Disposition |
+|---|---|---|---|
+| `fprintf` 44, `sprintf` 15, `printf` 12, `vfprintf` (`say`, `fatal`, `pfatal`, `ask`), `perror` 1 | all | messages, reject headers, `--help`, file names | §6 |
+| `fseek`/`ftell` | `pch.c` | random access in the patch file | **`libc16`** (decision 8) |
+| `unlink` | `util.c`, `patch.c` | temp files, backups | **`libc16`** |
+| `rename` (`rename.c` fallback uses `link`) | `util.c` `move_file` | install output, make backups | **`libc16` `rename`**. DOS 56h fails when the target exists, so `move_file` must unlink first, which opens a window (§5). |
+| `tmpnam` + `TMPDIR` | `patch.c` `make_temp` | four temp names | `compat/`: INT 21h/5Ah in the target's directory (DOS 3.0) |
+| `creat` | `inp.c`, `util.c` | plan B temp file, file creation | `open(O_CREAT\|O_TRUNC\|O_WRONLY\|O_BINARY)` |
+| `fstat` | `pch.c`, `inp.c` | size and type of the patch and input | `compat/`: `filelength` plus a "regular file" check (IOCTL 4400h for devices) |
+| `getuid` | `inp.c` | RCS/SCCS lock ownership | drop with RCS/SCCS (decision 5) |
+| `system` | `inp.c`, `util.c` | RCS `co`/SCCS `get`; `makedirs` | drop RCS/SCCS; `makedirs` → `mkdir` loop |
+| `popen`/`pclose` | `pch.c` | `-e` ed scripts | drop `-e` (decision 5) |
+| `signal`/`sigaction`, `kill`/`getpid` | `util.c` | clean up temp files on a signal, then re-raise | `compat/`: Ctrl-Break (INT 23h) → clean up and exit 2 |
+| `isatty` | `util.c` `ask` | find a terminal | `compat/`: IOCTL 4400h, falling back to `CON` |
+| `chdir` | `patch.c` `-d` | working directory | defer `-d` (decision 5) |
+| `setbuf` | `patch.c` | `stderr` buffer | drop (output is unbuffered) |
+| `atol` | `pch.c` | hunk numbers | checked accumulation (overflow → malformed) |
+| `memchr` | `pch.c`, `inp.c` | | 2.2's `memchr.c` (GPL; `patch16` only) |
+| `fopen(..., "r"/"w")` | 6 sites | patch, input, output, reject | **binary modes** (§5.1) |
 
-## 4. Memory: what breaks on a 16-bit host
+## 4. Memory hazards in 2.2 on a 16-bit host
 
-`typedef unsigned MEM` (16 bits) is the size `inp.c` and `pch.c` pass to `malloc`. `LINENUM` is `long`, which is fine.
+`size_t` is 16 bits, `LINENUM` is `long`, and pointers are 4 bytes in the compact model.
 
-### 4.1 Plan A (whole file in memory) has an overflow bug
+### 4.1 Hunk arrays: overflow from a hunk header (must fix)
 
 ```c
-i_womp = malloc((MEM)(i_size+2));                   /* inp.c:125 */
-if (read(ifd, i_womp, (int)i_size) != i_size) {...} /* inp.c:134 */
+static size_t hunkmax = INITHUNKMAX;                         /* pch.c:51 */
+hunkmax *= 2;                                                /* grow_hunkmax */
+realloc (p_line, hunkmax * sizeof (*p_line));
+...
+p_max = p_ptrn_lines + 6;                                    /* pch.c:605, context */
+p_max = p_ptrn_lines + p_repl_lines + 1;                     /* pch.c:913, unified */
+while (p_max >= hunkmax) if (! grow_hunkmax ()) ...
 ```
 
-For a file of 65,534 or 65,535 bytes, `(MEM)(i_size+2)` wraps to 0 or 1, so `malloc` returns a tiny block (or null). `(int)i_size` is -2 or -1, which `libc16`'s `read(int, void *, unsigned)` takes as 65,534 or 65,535: **a heap overrun**. The same happens for every `i_size` congruent to 65,534 or 65,535 mod 65,536. For other sizes over 64 KB, the read count is truncated and the `!= i_size` check falls back to plan B. That fallback works, but only by luck.
+`p_ptrn_lines` and `p_repl_lines` come from the hunk header, before any lines are read. In the compact model, growth from 16,000 entries computes `32000 * 4` = 128,000. That wraps to 62,464, so `realloc` **shrinks** `p_line` and the parser then writes past it. `hunkmax` itself wraps at the next doubling (64,000 → 62,464 → …), and since `p_max` is a `long`, the `while` can keep calling `realloc` with nonsense sizes. One header line such as `@@ -1,20000 +1,20000 @@` can corrupt the heap.
 
-The line-pointer array `(MEM)((iline + 2) * sizeof(char *))` wraps the same way once a file has 32,766 lines or more (small model), or 16,382 or more (compact). A file of 32,766 empty lines is only 32 KB, and the loop that fills the array then writes past it: **a second overrun**.
+**Fix:** reject a hunk whose claimed sizes exceed an explicit cap (for example 4,000 lines per side) before allocating. Make `grow_hunkmax` refuse any growth whose byte count would exceed 65,530. Add tests at the 16-bit boundaries.
 
-Even when correct, plan A is capped at one ≤ 64 KB object: `libc16`'s far heap allows at most 65,530 bytes per allocation (`libc16` `docs/spec/heap.md`). In the small model, file, index and hunk must all share the roughly 50 KB of `DGROUP` left after static data and stack.
+### 4.2 Plan B: wrap and hang on long lines (must fix)
 
-### 4.2 Plan B (disk) uses fixed-width records
+```c
+for (tibufsize = TIBUFSIZE_MINIMUM; tibufsize < maxlen; tibufsize <<= 1)  /* inp.c:409 */
+  continue;
+tibuf[0] = xmalloc (2 * tibufsize);
+```
 
-Plan B scans the file for its **longest** line (`maxlen`, capped by `fgets` at 1,023), then writes every line padded to `maxlen` into 1,024-byte blocks of `1024 / maxlen` lines each. One 1,000-character line in a 10,000-line source therefore makes a **10 MB** temporary file, which is fatal on a 360 KB floppy and slow on an XT disk. Lines longer than 1,023 bytes are also silently split by `fgets`.
+2.2 removed the line-length limit, so `maxlen` is unbounded:
 
-### 4.3 Hunk storage
+| Longest line | Effect |
+|---|---|
+| over 32,768 bytes | `tibufsize` goes 32,768 → 0, and `0 < maxlen` forever: **a hang** |
+| over 16,384 bytes | `tibufsize` = 32,768 and `2 * tibufsize` = 0: `xmalloc(0)` followed by 32 KB writes, **a heap overrun** |
 
-Each hunk line is copied with `savestr` (heap) and indexed through three arrays that start at `INITHUNKMAX` = 125 entries and double: `char *p_line[]`, `short p_len[]` and `char p_char[]`. That is 5 bytes per line (small) or 7 (compact), plus the text. In the small model a 1,000-line hunk of 40-character lines needs about 46 KB, which is nearly all the near heap.
+Plan B also keeps fixed-width records: every line is padded to `maxlen` in blocks of at least 8 KB. One 8,000-character line in a 10,000-line file therefore makes an **80 MB** temp file.
 
-`hunkmax` is a 16-bit `int`, and `grow_hunkmax()` is called while `p_max`, the line count **claimed by the hunk header**, is at least `hunkmax`. The header is read before any lines are, and the only bound is `MAXHUNKSIZE` = 100,000. With far pointers, growth from 16,000 to 32,000 entries computes `(MEM)32000 * 4` = 128,000, which wraps to 62,464. `realloc` then *shrinks* `p_line` and the parser writes past it. The next doubling overflows `hunkmax` itself to a negative value. In the small model the same wrap comes one step later; there, `realloc` will usually fail first for lack of near heap. **A malformed or hostile patch can corrupt memory with one header line**, such as `*** 1,20000 ****`. Hunk sizes must be validated against an explicit cap before any allocation (DESIGN.md §6, "Validate counts … overflow").
+### 4.3 Plan A: safe but small
+
+Eggert's checks (`size + 2 < 2`, `allocated_bytes / per_byte != size + 2`) make plan A refuse rather than overflow. Plan A allocates `(size + 2) * (sizeof (char *) + 1)` bytes as **one** object: 5 bytes per input byte in compact, 3 in small. So it handles at most about **13 KB** files in compact (`libc16`'s per-object limit is 65,530) or about 21 KB in small. Anything larger falls through to plan B, so plan B is the common path, not the exception.
 
 ### 4.4 Recommendation
 
-- **Replace plan A and plan B with one bounded design** (DESIGN.md §8). It would build a file-backed index of 32-bit line **offsets** in the original, kept as a small file in fixed blocks with one or two blocks cached, and seek into the original to fetch lines into a bounded buffer. That is 4 bytes of disk per line instead of `maxlen`, with constant RAM. `ifetch()`'s interface (line number → line pointer valid until the next call on that buffer) can stay, so `patch.c`'s matcher is unchanged. This must be an independently written module under DESIGN.md §3.4 rules; it replaces the Wall component rather than translating it.
-- **Bound hunk size explicitly**, for example to 2,000 lines and 64 KB of text, failing before any output is replaced. On-disk hunk staging can stay a later improvement, as the design says.
-- **Memory model: compact.** It costs about 24% more code than small (18.4 KB → 22.9 KB for the measured objects), but moves hunk text and buffers out of `DGROUP` onto the far heap. With the bounded line index, that leaves most of conventional memory for large hunks. Small is possible if hunks are capped tightly. Measure both again once the line-index module exists (DESIGN.md §12, question 6).
+Replace plan A and plan B with one bounded, file-backed **line-offset index**:
 
-## 5. `libc16` gaps and where each belongs
+- 32-bit offsets of each line in the original, stored in fixed blocks in a small temp file with one or two blocks cached;
+- lines read by seeking into the original, into a bounded buffer;
+- an explicit maximum line length that fails before any output is replaced.
 
-| Need | Belongs in | Reason |
+That is 4 bytes of disk per line, constant RAM, no `maxlen` padding, and `ifetch()`'s interface unchanged for `patch.c`. It can be written as a rework of 2.2's `inp.c` (GPL; DESIGN.md §3.4 allows adapting it). Cap hunk sizes as in §4.1. On-disk hunk staging can stay a later improvement.
+
+## 5. DOS-specific work
+
+| Need | Where | Notes |
 |---|---|---|
-| `int rename(const char *, const char *)` (INT 21h/56h) | **`libc16`** | C89, DOS 2.0. A second consumer exists: `tico16/src/dos.c` has private `dos_rename`/`dos_unlink`. |
-| `int unlink(const char *)` and `int remove(const char *)` (INT 21h/41h) | **`libc16`** | same |
-| `long ftell(FILE *)`, `int fseek(FILE *, long, int)` | **`libc16`** | C89. Input is buffered, so these must discard or adjust the read buffer and the `ungetc` hold. Text-mode `ftell` must return a value `fseek` accepts. |
-| unique temp file in a given directory (INT 21h/5Ah, DOS 3.0) | `patch16` `compat/` | DESIGN.md §4 says to investigate first. Its semantics (same directory as the target, DOS 3.0+) are `patch16`-specific. If added to `libc16` later, `tmpnam` would be the wrong shape. |
-| buffered output stream | `patch16` `compat/` | `libc16` output is unbuffered by design (`docs/spec/stdio.md`). `dump_line()` and `copy_till()` call `putc` per byte, which is one INT 21h per output byte, far too slow on an 8088. A 512-byte write buffer on the output and reject files fixes it without changing `libc16`. |
-| `isatty`, Ctrl-Break handling, `fstat` | `compat/` | Small, `patch16`-specific uses. `filelength` already covers `fstat`'s size. |
-| `assert`, `atol` | `patch16` | `assert` → `fatal`; `atol` → checked parser (DESIGN.md §4). |
+| `rename`, `unlink`/`remove` | **`libc16`** | clean-room MIT with tests (decision 8); INT 21h/56h and 41h; `tico16` is a second consumer |
+| `fseek`/`ftell` | **`libc16`** | must discard the input buffer and the `ungetc` hold. Test binary and text streams, `ungetc` before `ftell`, and seeks back to `ftell` values (decision 8). |
+| temp files | `compat/` | 5Ah (create unique) in the **target's directory**, so the install is a same-drive rename. Never `TMPDIR` across drives. |
+| buffered output | `compat/` | 2.2 writes whole lines with `fwrite`, so this is less critical than in 1988 code. A 512-byte buffer still cuts INT 21h calls for short lines. |
+| safe install (`move_file`) | `compat/` | DOS 56h cannot rename over an existing file. The sequence: (1) rename the original to a collision-checked backup or hidden temp name; (2) rename the new file into place; (3) on failure, rename the original back; (4) delete the backup unless `-b`. Leave recovery instructions if the rollback fails (DESIGN.md §7). |
+| backup/reject names | adapt `addext.c` | `.ORG` / `.REJ` **replace** the extension (`FOO.C` → `FOO.ORG`). If the name already ends in `.ORG` or `.REJ`, or the result exists, use 5Bh (create new) to pick `FOO.OR1`… or fail. Never overwrite silently (decision 6). |
+| Ctrl-Break | `compat/` | clean up temp files, exit 2 |
 
-**DOS 3.0 minimum.** The only DOS 3.0 call needed is 5Ah (create unique file). 5Bh (create new file, fail if it exists) is also 3.0 and is useful for collision-checked backup names. Everything else is DOS 2.0. This confirms DESIGN.md §2's "DOS 3.0+".
+### 5.1 Binary mode, CRLF and `^Z`
 
-### 5.1 Text mode and `^Z`
+`libc16` text mode translates `\r\n` and **stops at `^Z`**. That also makes plan A's `read(...) != size` check fail on any CRLF file. All of `patch16`'s files must be opened binary:
 
-`libc16`'s default text mode translates `\r\n` → `\n` on `read`. It also **stops at `^Z`**, leaving later bytes unreadable (`docs/spec/io.md`). DESIGN.md §7 forbids silently discarding bytes, and CRLF has to be preserved on output. So `patch16` must open the patch, original, output and reject files in binary mode (`O_BINARY`, `"rb"`/`"wb"`) and handle `\r` itself:
+- `fopen` with `"rb"`/`"wb"`;
+- `open` with `O_BINARY`;
+- `setmode(0, O_BINARY)` for a patch on standard input.
 
-- strip a trailing `\r` before comparing a patch line;
-- remember each original line's terminator and write it back unchanged;
-- give added lines the terminator style the target file predominantly uses (rule to be fixed in E4).
+Then:
 
-Wall's matcher compares lines with `strnEQ`/`similar` on `\n`-terminated text, so a normalised comparison buffer fits behind the new `ifetch()`.
+- **patch lines:** strip one trailing `\r` before parsing, so a Linux patch and a converted DOS patch read the same;
+- **matching:** compare original lines without their terminator;
+- **output:** write each original line's terminator back unchanged; give added lines the terminator style the target mostly uses (exact rule and tests in E4);
+- **`^Z`:** an ordinary byte. No implicit EOF (DESIGN.md §7).
 
-## 6. Formatted output
+### 5.2 `\ No newline at end of file`
 
-There are 139 call sites (`say` 49, `fatal` 54, `ask` 8, `fprintf` 13, `Sprintf` 14, `printf` 1), using only five conversions: `%s` ×73, `%ld` ×42, `%d` ×11, `%c` ×5 and `%3d` ×1.
+2.2 does not handle this marker; its 2.1 README listed it on the wish list. It has to be added in `pch.c`: mark the preceding line as lacking a newline on the relevant side and never add one. Later GNU releases still under GPLv2-or-later (2.5.x) handle it and may be adapted, with a PROVENANCE.md entry.
 
-Two options:
+### 5.3 Git textual patches
 
-1. **Rewrite each call** into explicit `msg_str`/`msg_long`/`msg_char` sequences. This needs no engine, which matches DESIGN.md §4 literally. It is about 140 edits touching most of Wall's diagnostic lines, which makes later diffs against upstream noisier.
-2. **A `patch16`-local `say`/`fatal`/`ask` interpreter limited to exactly those five conversions** (around 60 lines, rejecting anything else at run time). Wall's call sites stay unchanged, and the K&R `say1..say4` macros become real varargs. DESIGN.md §4 says not to build "a general formatting engine". This would be a fixed, non-general one, but it is still a judgment call (§7).
+2.2 predates Git. Its `intuit_diff_type` skips unrecognised lines, so `diff --git`, `index …`, `new file mode`, `deleted file mode` and `similarity index` are mostly ignored as leading garbage. Explicit handling is still needed:
 
-`Sprintf` is mostly used to build file names (`%s%s`) and Unix command strings. The command strings disappear with RCS/SCCS/`ed`, and the file names become `strcpy`/`strcat`.
+- recognise the preamble;
+- reject binary patches (`GIT binary patch`, `Binary files … differ`) and mode-only, rename and copy changes with a clear message (DESIGN.md §6);
+- take `a/`/`b/` names with `-p1`.
 
-## 7. Wall's interface versus DESIGN.md §5
+## 6. Formatted output (decision 7)
 
-From `get_some_switches()`: `-b ext`, `-B prefix`, `-c`, `-d dir`, `-D sym`, `-e`, `-f`, `-F n`, `-l`, `-n`, `-N`, `-o file`, `-p[n]`, `-r file`, `-R`, `-s`, `-S`, `-v`, `-x n`.
+The message functions `say`, `fatal`, `pfatal` and `ask` already go through one `vfprintf` path in `util.c`. Their 139 call sites plus `printf`/`fprintf`/`sprintf` use only `%s` ×104, `%ld` ×46, `%d` ×10, `%c` ×10, `%o` ×1 and `%3ld` ×1.
 
-| Topic | Wall pl12 | DESIGN.md §5 | Decision needed |
+**Plan:** a `patch16`-local formatter in `compat/` that implements exactly `%s`, `%c`, `%d`, `%ld`, `%o`, a numeric width for `%ld`, and `%%`. It writes through the output buffer and aborts with an internal-error message on any other conversion. `say`, `fatal`, `pfatal` and `ask` call it directly. The remaining `fprintf`/`printf` sites (reject-file headers, `--help`) call it through a `fmt_out(FILE *, ...)` wrapper. `sprintf` sites that build file names become `strcpy`/`strcat`. Nothing goes into `libc16`.
+
+## 7. Interface (decisions from PR #1)
+
+| # | Topic | 2.2 | Change for `patch16` |
 |---|---|---|---|
-| `-n` | **force "normal diff"** interpretation | `-n` = dry run | Keep Wall's meaning and use another letter or `--dry-run` for dry run, or break compatibility. GNU later used `--dry-run` with no short form. |
-| Exit status | `my_exit(failtotal)`: the **number** of failed hunks; `fatal` exits 1 | 0 / 1 (rejects) / 2 (fatal) | Adopt 0/1/2 as an explicit deviation, documented. |
-| Fuzz | default `maxfuzz = 2` | start at zero | Default `-F0` for v0.01, with `-F` kept. |
-| `-p` absent | `strippath = 957`: use the **basename** only | — | Keep Wall's default or require `-p`; Git patches need `-p1`. |
-| `-e` (ed scripts) | via `popen("/bin/ed")` | not listed | Drop. |
-| RCS/SCCS checkout | `system("co -l")`, `system("get -e")` | not listed | Drop. |
-| `-D` (`#ifdef` output) | supported | not listed | Keep; pure text, no OS cost. |
-| Backup names | `.orig`, or `~` without `FLEXFILENAMES` | not specified | 8.3: replace the extension with `.ORG`? Define in E4. |
-| Reject file | `.rej`, or `#` | not specified | `.REJ` replacing the extension; collisions per DESIGN.md §7. |
+| 1 | `-n` | `--normal` | none; `--dry-run` already exists |
+| 2 | exit status | 0 / 1 / 2 | none; add tests and a compatibility note (Wall's pl12 returned a failure count) |
+| 3 | fuzz | `maxfuzz = 2` | default 0; `-F` opts in |
+| 4 | no `-p` | `-p` "infinity" (basename) | none; document `-p1` for Git |
+| 5 | `-e`, RCS/SCCS, `-d` | supported | drop `-e` and RCS/SCCS; defer `-d` |
+| 5 | `-D` | supported | keep |
+| 6 | backup/reject | `.orig`/`~`, `.rej`/`#` via `addext` | `.ORG`/`.REJ` replacing the extension; collision rules in §5 |
 
-## 8. Formats in the baseline
+## 8. Next steps (E2)
 
-`intuit_diff_type()` recognises `CONTEXT_DIFF` (old-style `diff -c`), `NEW_CONTEXT_DIFF` (4.3BSD `diff -c`), `NORMAL_DIFF` and `ED_DIFF`. Unified diff is absent, as expected. The hunk model (`p_line`/`p_len`/`p_char` with `' '`, `'-'`, `'+'`, `'!'`, `'='`, `'*'`) can represent unified hunks. A separate unified parser that fills the same arrays, as DESIGN.md §4 intends, needs no matcher changes. Separately, `pch_swap()`, used for `-R`, works on that model too, so `-R` is likely inherited for free.
+1. `libc16`: `rename`, `unlink`/`remove`, `fseek`/`ftell`, as clean-room MIT members with specs and tests (separate PR in `gr-dos/libc16`).
+2. `patch16`:
+   - import the 2.2 files listed in PROVENANCE.md **unmodified** as the first commit;
+   - then add the DOS `config.h`, `compat/` and a Makefile on the sibling pattern (`scripts/fetch-libc16`, `build/tools.env`, compact model);
+   - get a first linked `PATCH16.EXE`.
+3. Fixes in order: binary I/O (§5.1), hunk caps (§4.1), line index replacing plan A/B (§4.4), safe install and names (§5), fuzz default, formatter (§6).
+4. Tests: host-side `diff -u` round trips and malformed input at 16-bit boundaries, run under DOSBox-X (DESIGN.md §9).
 
-## 9. Proposed next steps (E2 preparation, after the license gate)
+## Appendix A: Wall's 1988 code (historical, superseded)
 
-1. Decide the §7 interface questions and the §6 formatting option.
-2. `libc16`: propose `rename`, `unlink`/`remove`, `fseek`/`ftell` as clean-room MIT additions with specs and tests.
-3. `patch16`: `compat/` for temp files, buffered output, messages and `move_file` replacement; independent line-index module; fixed DOS `config.h`; Makefile on the sibling-project pattern (`scripts/fetch-libc16`, `build/tools.env`).
-4. Commit Wall's files under `src/` only after LICENSE-RESEARCH.md §5 is resolved.
+The first exploration targeted Wall's patch 2.0 pl12 from X11R3 (LICENSE-RESEARCH.md §1). The findings, for the record:
+
+- Four of its five files compiled unmodified with `-ms`/`-mc`. `util.c` failed on its K&R message functions and on `signal`. Partial `_TEXT` was 18.4 KB small and 22.9 KB compact.
+- **Plan A overrun:** `malloc((MEM)(i_size+2))` with a 16-bit `MEM` wrapped for files of 65,534–65,535 bytes (mod 65,536), followed by `read` of nearly 64 KB.
+- **Line-pointer overrun:** the array overran at 32,766 lines (small) or 16,382 (compact).
+- **Hunk growth:** `int hunkmax` growth wrapped as in §4.1.
+- **Plan B:** padded every line to the longest one, in 1 KB blocks.
+- **Output:** went byte at a time through `putc`.
+- **Interface:** `-n` meant "normal diff", the exit status was the failed-hunk count, and the default fuzz was 2.
+
+2.2 fixes the plan A arithmetic, the per-byte output and the exit status, which is part of why it is the better baseline.

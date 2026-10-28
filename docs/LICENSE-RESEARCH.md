@@ -1,6 +1,6 @@
 # patch16: license research (E0)
 
-**Status:** E0 evidence gathered 2026-10-28; **gate not yet met** (§5)
+**Status:** **Baseline changed 2026-10-28** to GNU `patch` 2.2 under its published GPL-2.0-or-later terms (§8). §1–§7 now record the history of the X11R3/1988 snapshot and the reasons for the change.
 **Scope:** DESIGN.md §3 and milestone E0. Engineering record, not a legal opinion.
 
 ## 1. Baseline snapshot
@@ -16,7 +16,7 @@
 | Version | `patchlevel.h`: `#define PATCHLEVEL 12`; newest RCS revision `patch.c,v 2.0.1.6 88/06/22` |
 | File dates | 1988-08-31 for all files except `CHANGES` (1988-09-06) |
 
-`scripts/fetch-upstream` downloads the archive, checks the SHA-256 above, extracts `util/patch` to `build/upstream/patch` and checks every file against `upstream/MANIFEST.sha256`. The snapshot is not committed (DESIGN.md §10: no redistribution before the gate).
+Per-file SHA-256s for this snapshot are in `upstream/x11r3-patch-2.0pl12.sha256`. It was never committed, and since the change of baseline (§8) it is not fetched by `scripts/fetch-upstream`.
 
 ## 2. Notices in the snapshot
 
@@ -109,7 +109,9 @@ What is not established:
 
 **Gate status: not met.** The evidence is good, but it isn't the complete chain of title DESIGN.md §3.2 requires before importing Wall's code into `patch16` for distribution.
 
-## 6. Ways to close the gate
+## 6. Ways to close the gate (superseded by §8)
+
+This section is kept for the record. The project chose option 3 (§8), so contacting Wall or the FSF is no longer a prerequisite. Seek clarification only if a real ambiguity remains for a file that is needed.
 
 In order of strength:
 
@@ -121,4 +123,61 @@ In order of strength:
 
 ## 7. Treatment of Wall's notice (DESIGN.md §3.3)
 
-Option B (historical artifact) remains the default. Option A would need Wall's agreement for the modified program **and** grants from the §3.2 contributors, which is unlikely to be obtainable for every part. If the gate closes, `docs/HISTORY-LICENSE.md` should reproduce the two notices in §2 verbatim, with their source path and the SHA-256s from `upstream/MANIFEST.sha256`.
+Option B (historical artifact) remains the default. Option A would need Wall's agreement for the modified program **and** grants from the §3.2 contributors, which is unlikely to be obtainable for every part. `docs/HISTORY-LICENSE.md` should reproduce the two notices in §2 verbatim as historical context, with their source path and the SHA-256s from `upstream/x11r3-patch-2.0pl12.sha256`, and state that the operative license is GPL-2.0-or-later (§8).
+
+## 8. Baseline: GNU `patch` 2.2 (decision 2026-10-28)
+
+Decision (PR #1, https://github.com/gr-dos/patch16/pull/1#issuecomment-6468026597): `patch16` is based on **GNU `patch` 2.2, distributed under its published "GPL version 2, or (at your option) any later version" terms**. This replaces porting the independently distributed 1988 snapshot. Consequences:
+
+- `patch16` is distributed under **GPL-2.0-or-later**.
+- Wall's 1988 noncommercial notice is **historical context only** (§7, Option B). It is not offered as an alternative license for the modified program.
+- Later GNU `patch` releases published under GPLv2-or-later (through 2.5.9) are also eligible sources for specific changes. Each reuse is recorded in PROVENANCE.md. GPLv3-only releases (2.6 onward) are not used.
+- `libc16` remains MIT-only. Nothing from this lineage goes into it.
+- No Jörg Schilling-authored code: the 2.2 tree contains no file or ChangeLog entry by him (searched for "Schilling" and "Joerg").
+
+### 8.1 The pinned source
+
+| | |
+|---|---|
+| Repository | GNU `patch`, `https://git.savannah.gnu.org/git/patch.git`; mirror `https://github.com/mirror/patch` |
+| Tag | `v2.2`: "Import of patch-2.2.tar.gz", Andreas Gruenbacher, 2009-03-12 |
+| Commit | `bcce1233902dc7a94623b3a90cd7920c44f22474` (same on both) |
+| Tree | `35098589ae46a13ab212e74fc6b0b710a44bbcb3` |
+| Release date | 1997-04-17 (ChangeLog: "Version 2.2 released") |
+| Files | 34; SHA-256s in `upstream/MANIFEST.sha256`; fetched and checked by `scripts/fetch-upstream` |
+
+The original `patch-2.2.tar.gz` could not be found. It is absent from `ftp.gnu.org/gnu/patch` (earliest: 2.5, 1997-08-31), `ftp.gnu.org/old-gnu/patch`, `ftp.funet.fi`'s historical GNU area (which has 2.0.12g11, 2.0.12u9 and 2.1) and the Wayback Machine. The git import is therefore the reference. If the tarball turns up, compare it with the tree above.
+
+Stable references for the notices (commit-pinned):
+
+- README: https://github.com/mirror/patch/blob/bcce1233902dc7a94623b3a90cd7920c44f22474/README
+- NEWS ("Copyright notices have been clarified"): https://github.com/mirror/patch/blob/bcce1233902dc7a94623b3a90cd7920c44f22474/NEWS
+- COPYING (GPLv2): https://github.com/mirror/patch/blob/bcce1233902dc7a94623b3a90cd7920c44f22474/COPYING
+
+### 8.2 Notices by file
+
+| Files | Copyright | License notice |
+|---|---|---|
+| `patch.c`, `version.c` | 1984–1988 Larry Wall; 1989–1993, 1997 FSF | GPLv2-or-later (`version.c`: the `--version` text names the GPL) |
+| `pch.c` | 1986–1988 Larry Wall; 1990–1993, 1997 FSF | GPLv2-or-later |
+| `inp.c`, `common.h` | 1986, 1988 Larry Wall; FSF 1990/1991–1997 | GPLv2-or-later |
+| `util.c` | 1986 Larry Wall; 1992, 1993, 1997 FSF | GPLv2-or-later |
+| `addext.c`, `argmatch.c`, `backupfile.c`, `backupfile.h` | FSF (David MacKenzie, Paul Eggert) | GPLv2-or-later |
+| `getopt.c`, `getopt.h`, `getopt1.c`, `memchr.c`, `rename.c` | FSF | GPLv2-or-later (not LGPL) |
+| `inp.h`, `pch.h`, `util.h`, `version.h`, `argmatch.h`, `basename.c`, `acconfig.h`, `config.hin`, `configure.in`, `patch.man`, `mkinstalldirs` | no per-file notice | covered by the README statement and NEWS: "Every file in this version of \`patch' can be distributed under the GNU General Public License" |
+| `install-sh` | M.I.T. (X11) | X11/MIT notice; build-only, not used |
+
+Every notice is preserved verbatim in any file `patch16` adapts. New `patch16` changes carry a separate copyright line and the same GPLv2-or-later notice, so GNU/Wall code and our changes stay distinguishable (PROVENANCE.md).
+
+### 8.3 Contributors (recorded, not independently verified)
+
+The 2.2 ChangeLog and the inherited RCS logs credit:
+
+- **Primary authors:** Larry Wall (1984–1988), David J. MacKenzie, Paul Eggert and Jim Kingdon (FSF, 1989–1997), and Karl Berry.
+- **Wayne Davison** (`davison@dri.com`): the unified-diff support, applied 1990.
+- **Credited patches:**
+  - Kevin Braunsdorf (`ksb@mentor.cc.purdue.edu`, `-D` fix);
+  - Chip Salzenberg, Eugene Pang, Conrad Kimball, Poul-Henning Kamp, Michael S. Muegel, Tim Iverson, and `csss@scheme.cs.ubc.ca`;
+  - from Wall's era: `van%ucbmonet@berkeley` (4.3BSD context diffs), `jromine@uci-750a` (`-p`), `joe@fluke` (`-D`), and an unnamed `-B` contributor.
+
+`patch16` relies only on the published GNU 2.2 notices for these contributions. It claims no permission beyond them and does not relicense any of this code.
