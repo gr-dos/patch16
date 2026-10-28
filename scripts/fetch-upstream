@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# Fetch the X11R3 source distribution, check its SHA-256 against the one
+# below before unpacking it, and unpack its util/patch directory (Larry
+# Wall's patch 2.0, patchlevel 12) as DIR, then check every file against
+# upstream/MANIFEST.sha256. Reuses DIR if it already holds that snapshot.
+#
+# The snapshot is a read-only reference for the exploration milestones
+# (docs/DESIGN.md, E0 and E1). It is not committed or redistributed until
+# the GPL grant is established (docs/LICENSE-RESEARCH.md).
+#
+# usage: scripts/fetch-upstream [DIR]     (default: build/upstream/patch)
+#
+# X11R3_URL, if set, is fetched instead (a mirror); it must have the same
+# SHA-256.
+
+set -eu
+
+sha256=1800eaa9abac0fade9f9e3e9caf3460c40ed36a3c5af6f83521f578f44f1b9c1
+
+url=${X11R3_URL:-https://www.x.org/releases/X11R3/X.V11R3.tar.gz}
+dir=${1:-build/upstream/patch}
+manifest=$(cd "$(dirname "$0")/.." && pwd)/upstream/MANIFEST.sha256
+stamp="$dir/.tar-sha256"
+
+if [ "$(cat "$stamp" 2>/dev/null)" != "$sha256" ]; then
+  tgz="$(dirname "$dir")/X.V11R3.tar.gz"
+  mkdir -p "$(dirname "$dir")"
+  if ! { [ -f "$tgz" ] && echo "$sha256  $tgz" | sha256sum -c --status; }; then
+    rm -f "$tgz"
+    curl -fsSL -o "$tgz.tmp" "$url"
+    echo "$sha256  $tgz.tmp" | sha256sum -c --quiet
+    mv "$tgz.tmp" "$tgz"
+  fi
+  rm -rf "$dir" "$dir.tmp"
+  mkdir -p "$dir.tmp"
+  tar -xzf "$tgz" -C "$dir.tmp" X.V11R3/util/patch
+  mv "$dir.tmp/X.V11R3/util/patch" "$dir"
+  rm -rf "$dir.tmp"
+  (cd "$dir" && sha256sum -c --quiet "$manifest")
+  echo "$sha256" > "$stamp"
+fi
