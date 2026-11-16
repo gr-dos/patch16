@@ -151,6 +151,13 @@ char **argv;
       if (!skip_rest_of_patch)
 	get_input_file (inname, outname);
 
+      /* patch16: a read-only file is not patched; its hunks go to the
+	 reject file.  */
+      if (!skip_rest_of_patch && p16_read_only (outname)) {
+	  say ("File %s is read-only; refusing to patch\n", outname);
+	  skip_rest_of_patch = TRUE;
+      }
+
       if (diff_type == ED_DIFF) {
 	if (! dry_run)
 	  do_ed_script (ofp);

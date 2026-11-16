@@ -46,6 +46,7 @@ void abort (void);
 void p16_move_file (char const *, char const *, char *);
 void p16_move_new (char const *, char *);
 void p16_restore (void);
+int p16_read_only (char const *);
 
 /* libc16 has no memchr; GNU patch's memchr.c provides it.  */
 void *memchr (void const *, int, size_t);

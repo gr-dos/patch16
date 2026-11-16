@@ -47,11 +47,12 @@ udiff() {
 printf 'first\nsecond\nthird\n' > orig/hello.c
 printf 'first\nnew\nsecond\nthird\n' > want/hello.c
 udiff hello.c > hello.pat
-for f in a b c d e s; do cp orig/hello.c $f.c; done
+for f in a b c d e r s; do cp orig/hello.c $f.c; done
 sed 's/hello\.c/a.c/g' hello.pat > a.pat
 sed 's/hello\.c/b.c/g' hello.pat > b.pat
 sed 's/hello\.c/d.c/g' hello.pat > d.pat
 sed 's/hello\.c/e.c/g' hello.pat > e.pat
+sed 's/hello\.c/r.c/g' hello.pat > r.pat
 sed 's#hello\.c#sub/s.c#g' hello.pat > s.pat
 mkdir sub
 cp orig/hello.c sub/s.c
@@ -124,6 +125,11 @@ call rc 12
 rem --- version
 patch16 --version >o13.txt
 call rc 13
+rem --- a read-only file is refused, and its hunks are rejects
+attrib +r r.c
+patch16 -p1 -i r.pat >o14.txt
+call rc 14
+attrib -r r.c
 EOF
 
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 300 \
@@ -232,6 +238,15 @@ check_version() {
     head -1 O13.TXT | tr -d '\r' | grep -q "^patch $(cat "$top/VERSION") (GNU patch 2.2)\$"
 }
 if check_version; then ok; else not_ok "step 13: version"; fi
+
+rc 14 1
+expect 14 <<'EOF'
+File r.c is read-only; refusing to patch
+Hunk #1 ignored at 1.
+1 out of 1 hunk ignored--saving rejects to r.REJ
+EOF
+same "step 14: read-only file unchanged" r.c orig/hello.c
+if tr -d '\r' < R.REJ | grep -q '^+ new$'; then ok; else not_ok "step 14: reject holds the hunk"; fi
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |

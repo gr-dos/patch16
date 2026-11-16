@@ -91,6 +91,17 @@ aside_name (char const *file)
   return name;
 }
 
+/* Whether NAME is a file with the read-only attribute. DOS keeps that
+   attribute through a rename, so patching would leave the original's
+   hidden copy undeletable; patch16 refuses such a file instead. */
+int
+p16_read_only (char const *name)
+{
+  struct stat st;
+  return stat (name, &st) == 0 && (st.st_mode & S_IFREG)
+	 && !(st.st_mode & S_IWRITE);
+}
+
 /* Put the original back, if a new version was not put in its place. */
 void
 p16_restore (void)

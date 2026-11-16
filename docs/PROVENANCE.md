@@ -42,7 +42,7 @@ All by patch16 contributors, GPLv2-or-later, written for this port; no code take
 | `compat/include/p16.h`, `unistd.h`, `signal.h`, `assert.h` | POSIX names GNU `patch` uses, mapped onto `libc16` and the adapters below | build |
 | `compat/fmt.c` | message formatter: `%s %c %d %ld %o %%` with a width, nothing else (decision 7) | `tests/run.sh` (messages) |
 | `compat/dos.c` | `isatty`, `fstat` (IOCTL 4400h), `chdir` (3Bh), `creat` (binary), `tmpnam` (5Ah), checked `atol`; stubs for `system`, `popen`, `link`, signals | `tests/run.sh` |
-| `compat/install.c` | safe install: the original moves aside before the new file goes in and is put back on failure; backups and rejects take the next free name, never replacing a file (decision 6) | `tests/run.sh` steps 1–9 |
+| `compat/install.c` | safe install: the original moves aside before the new file goes in and is put back on failure; backups and rejects take the next free name, never replacing a file (decision 6); a read-only file is refused | `tests/run.sh` steps 1–9, 14 |
 
 ## Changes to upstream files
 
@@ -51,11 +51,16 @@ Each change is commented `patch16:` in the source; `git log -p src/` shows it ag
 | File | Change |
 |---|---|
 | `util.c` | `move_file` builds the backup name as before and calls `p16_move_file`; GNU's same-file search, which never ends on DOS (`st_ino` is always 0), is removed. `copy_file` opens binary. |
-| `patch.c` | generated reject names go through `p16_move_new` (`FOO.REJ`, `FOO.RE1`, …), and the message names the file used; `cleanup` restores an original that was moved aside; output and reject files open binary |
+| `patch.c` | generated reject names go through `p16_move_new` (`FOO.REJ`, `FOO.RE1`, …), and the message names the file used; `cleanup` restores an original that was moved aside; a read-only file is refused and its hunks go to the reject file; output and reject files open binary |
 | `addext.c` | an extension beginning with `.` replaces the name's own (`FOO.C` → `FOO.ORG`) |
 | `backupfile.c` | the default suffix is `.ORG` |
 | `basename.c` | `\` and `:` also end a directory or drive prefix |
 | `inp.c`, `pch.c` | every file opens binary, and a patch on standard input is read binary |
+
+## Build scripts
+
+- `scripts/fetch-libc16`: a copy of libc16's `consumers/fetch-libc16` (MIT, gr-dos/libc16), with only `version` and `sha256` set to libc16 0.05's published release (`libc16-0.05.zip.sha256`). libc16 is linked into `patch16.exe` and remains MIT; no patch16 or GNU code goes into it.
+- `scripts/fetch-upstream`: patch16's own.
 
 ## Historical material
 
@@ -64,4 +69,4 @@ Larry Wall's patch 2.0 pl12 as shipped in X11R3 (`upstream/x11r3-patch-2.0pl12.s
 ## Reference-only material consulted
 
 - GNU `patch` git, tags `v2.1` through `v2.6`: README, NEWS, COPYING, ChangeLog and file notices, for the license chain.
-- `libc16` (`../libc16`, release 0.04, and 0.05 for `rename`, `unlink`, `fseek` and `ftell`): headers and `docs/` specs, for the API gap list and the adapters.
+- `libc16` 0.05 (pinned by `scripts/fetch-libc16`): headers and `docs/` specs, for the API gap list and the adapters.
