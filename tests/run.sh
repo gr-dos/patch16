@@ -186,6 +186,14 @@ printf 'a\r\nb\r\n' > want/em.txt
 printf 'one\r\ntwo  words\r\nthree\r\n' > ws.txt
 printf -- '--- a/ws.txt\n+++ b/ws.txt\n@@ -1,3 +1,3 @@\n one\n-two words\n+2\n three\n' > ws.pat
 printf 'one\r\n2\r\nthree\r\n' > want/ws.txt
+printf 'one\r\ntwo\r\nthree\r\n' > df.txt
+sed 's/dl\.txt/df.txt/g' dl.pat > df.pat
+printf 'one\r\n#ifndef X\r\ntwo\r\n#else\r\nTWO\r\n2b\r\n#endif /* X */\r\nthree\r\n' > want/df.txt
+# -D with a context diff's changed (!) lines
+printf 'first\nsecond\nthird\n' > dc.txt
+printf 'first\nSECOND\nthird\n' > want/dc-new.txt
+"$HOSTDIFF" -c --label a/dc.txt --label b/dc.txt dc.txt want/dc-new.txt > dc.pat
+printf 'first\n#ifndef X\nsecond\n#else\nSECOND\n#endif /* X */\nthird\n' > want/dc.txt
 
 cat > rc.bat <<'EOF'
 @echo off
@@ -302,6 +310,10 @@ patch16 -p1 -i em.pat >o48.txt
 call rc 48
 patch16 -l -p1 -i ws.pat >o49.txt
 call rc 49
+patch16 -D X -p1 -i df.pat >o50.txt
+call rc 50
+patch16 -D X -p1 -i dc.pat >o51.txt
+call rc 51
 if not exist patch16t.exe goto nobreak
 rem --- Ctrl-Break: while applying it cleans up and exits 2; between the
 rem --- renames that install the file it is ignored
@@ -508,6 +520,10 @@ rc 48 0
 same "step 48: empty file, CR LF patch" EM.TXT want/em.txt
 rc 49 0
 same "step 49: -l, CR LF file" WS.TXT want/ws.txt
+rc 50 0
+same "step 50: -D, CR LF file" DF.TXT want/df.txt
+rc 51 0
+same "step 51: -D, context diff" DC.TXT want/dc.txt
 
 if [ "$breaks" = 1 ]; then
     rc 37 2
@@ -547,7 +563,7 @@ if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftove
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|patch16t\.exe|M\.ORG|fd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|patch16t\.exe|M\.ORG|fd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------

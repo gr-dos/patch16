@@ -67,7 +67,8 @@ static LINENUM last_frozen_line;
 
 static char const *do_defines; /* symbol to patch using ifdef, ifndef, etc. */
 static char const if_defined[] = "\n#ifdef %s\n";
-static char const not_defined[] = "#ifndef %s\n";
+/* patch16: with a newline first, as if_defined has.  */
+static char const not_defined[] = "\n#ifndef %s\n";
 static char const else_defined[] = "\n#else\n";
 static char const end_defined[] = "\n#endif /* %s */\n";
 
@@ -839,8 +840,11 @@ LINENUM where;
 	    if (! copy_till (after_newline, where + old - 1))
 		return FALSE;
 	    if (R_do_defines) {
+		/* patch16: a deleted line is the text without the symbol,
+		   so #ifndef, as later GNU patch releases have it; 2.2 wrote
+		   #ifdef.  */
 		if (def_state == OUTSIDE) {
-		    put_define (*after_newline + if_defined);
+		    put_define (*after_newline + not_defined);
 		    def_state = IN_IFNDEF;
 		}
 		else if (def_state == IN_IFDEF) {
@@ -889,7 +893,7 @@ LINENUM where;
 		return FALSE;
 	    assert (*after_newline);
 	    if (R_do_defines) {
-	       put_define (not_defined);
+	       put_define (*after_newline + not_defined);
 	       if (ferror (fp))
 		write_fatal ();
 	       def_state = IN_IFNDEF;

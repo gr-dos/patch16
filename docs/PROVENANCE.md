@@ -52,7 +52,7 @@ Each change is commented `patch16:` in the source; `git log -p src/` shows it ag
 | File | Change |
 |---|---|
 | `util.c` | `move_file` builds the backup name as before and calls `p16_move_file`; GNU's same-file search, which never ends on DOS (`st_ino` is always 0), is removed. `copy_file` opens binary. |
-| `patch.c` | generated reject names go through `p16_move_new` (`FOO.REJ`, `FOO.RE1`, …), and the message names the file used; `cleanup` restores an original that was moved aside; a read-only file is refused and its hunks go to the reject file; output and reject files open binary; the program name is `patch16`; fuzz defaults to 0; `-e` is gone and an ed script is a fatal error; `main` ends through `exit` |
+| `patch.c` | generated reject names go through `p16_move_new` (`FOO.REJ`, `FOO.RE1`, …), and the message names the file used; `cleanup` restores an original that was moved aside; a read-only file is refused and its hunks go to the reject file; output and reject files open binary; the program name is `patch16`; fuzz defaults to 0; `-D` puts deleted lines under `#ifndef` (2.2 wrote `#ifdef`; later GNU releases made the same correction, written here independently); `-e` is gone and an ed script is a fatal error; `main` ends through `exit` |
 | `addext.c` | an extension beginning with `.` replaces the name's own (`FOO.C` → `FOO.ORG`) |
 | `backupfile.c` | the default suffix is `.ORG` |
 | `basename.c` | `\` and `:` also end a directory or drive prefix |
