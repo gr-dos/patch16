@@ -17,7 +17,7 @@
   1. 16-bit `size_t` overflows in hunk-array growth and in plan B. Hostile input can trigger both (§4).
   2. Plan A is limited to files of about 13 KB in the compact model, so plan B, which uses fixed-width records, carries real workloads.
   3. Binary-mode I/O and CRLF/`^Z` policy.
-  4. `\ No newline at end of file`, which 2.2 does not handle.
+  4. `\ No newline at end of file`, which this report said 2.2 does not handle; it does (§5.2, corrected in E2).
   5. DOS temp files and safe installation.
   6. A narrow local formatter (decision 7).
 - **`libc16` additions:** `rename`, `unlink`/`remove`, `fseek`/`ftell` (decision 8). Everything else is `patch16`-local.
@@ -175,7 +175,7 @@ Then:
 
 ### 5.2 `\ No newline at end of file`
 
-2.2 does not handle this marker; its 2.1 README listed it on the wish list. It has to be added in `pch.c`: mark the preceding line as lacking a newline on the relevant side and never add one. Later GNU releases still under GPLv2-or-later (2.5.x) handle it and may be adapted, with a PROVENANCE.md entry.
+**Corrected in E2:** 2.2 does handle this marker. The 2.1 README listed it on the wish list, and this report took that as current, but 2.2's `pch.c` has `incomplete_line`, which reads the marker after the last old or new line of a unified, context or normal diff and drops that line's newline. `tests/run.sh` (steps 60–74) checks round trips made with `diff -u`, `diff -c` and normal `diff` for a last line without a newline on both sides, a newline added, a newline removed, lines appended after it, and a change far from it, and step 80 the same on a CR LF file. No change was needed.
 
 ### 5.3 Git textual patches
 

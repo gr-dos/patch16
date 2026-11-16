@@ -15,7 +15,7 @@ Where each source module comes from (DESIGN.md §3.4). Licensing is in `docs/LIC
 | File | Lines | Copyright | Plan |
 |---|---:|---|---|
 | `patch.c` | 1127 | Wall 1984–88; FSF 1989–97 | adapt: main loop, options, fuzz default `-F0`, safe install |
-| `pch.c` | 1533 | Wall 1986–88; FSF 1990–97 | adapt: bounded hunk sizes; add `\ No newline at end of file` handling; Git preamble |
+| `pch.c` | 1533 | Wall 1986–88; FSF 1990–97 | adapt: bounded hunk sizes; Git preamble (`\ No newline at end of file` is handled by 2.2 already) |
 | `inp.c` | 501 | Wall 1986, 1988; FSF 1991–97 | adapt: plans A and B replaced by a bounded, file-backed line index (PORT-FEASIBILITY.md §4) |
 | `util.c` | 681 | Wall 1986; FSF 1992–97 | adapt: `move_file`, `ask`, signals, `makedirs` and temp files move behind `compat/` |
 | `version.c` | 30 | Wall 1984–88; FSF 1989–97 | adapt: `patch16` version text |

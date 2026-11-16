@@ -346,6 +346,43 @@ imgmount -u a >nul
 :nofull
 EOF
 
+# a last line without a newline ("\ No newline at end of file"): round
+# trips made with diff -u, -c and normal diff, steps 60 on, each its own
+# file; NL_CASES lists them as name, old text, new text (printf formats)
+NL_CASES='nb a\nb a\nc
+ad a\nb a\nb\n
+rm a\nb\n a\nb
+ap a\nb a\nb\nc\n
+fa x\n1\n2\n3\n4\na\nb y\n1\n2\n3\n4\na\nb'
+nl=60
+printf '%s\n' "$NL_CASES" | while read -r name old new; do
+    for fmt in u c n; do
+        f=$name$fmt.txt
+        printf "$old" > orig/$f
+        printf "$new" > want/$f
+        cp orig/$f $f
+        case $fmt in
+            u) udiff $f > $name$fmt.pat ;;
+            c) "$HOSTDIFF" -c --label "a/$f" --label "b/$f" orig/$f want/$f > $name$fmt.pat ;;
+            n) "$HOSTDIFF" orig/$f want/$f > $name$fmt.pat ;;
+        esac
+        if [ $fmt = n ]; then
+            echo "patch16 $f $name$fmt.pat >o$nl.txt" >> steps.bat
+        else
+            echo "patch16 -p1 -i $name$fmt.pat >o$nl.txt" >> steps.bat
+        fi
+        echo "call rc $nl" >> steps.bat
+        echo "$nl $f" >> nlsteps.txt
+        nl=$((nl + 1))
+    done
+done
+# and on a CR LF file, with an LF patch
+printf 'a\r\nb' > crnl.txt
+printf -- '--- a/crnl.txt\n+++ b/crnl.txt\n@@ -1,2 +1,2 @@\n a\n-b\n\\ No newline at end of file\n+c\n\\ No newline at end of file\n' > crnl.pat
+printf 'a\r\nc' > want/crnl.txt
+echo "patch16 -p1 -i crnl.pat >o80.txt" >> steps.bat
+echo "call rc 80" >> steps.bat
+
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 300 \
     "$DOSBOX" -defaultconf -silent -nogui -nomenu \
     -set "dosbox machine=cga" -set "cpu cputype=8086" \
@@ -525,6 +562,13 @@ same "step 50: -D, CR LF file" DF.TXT want/df.txt
 rc 51 0
 same "step 51: -D, context diff" DC.TXT want/dc.txt
 
+while read -r n f; do
+    rc $n 0
+    same "step $n: no newline at end ($f)" "$(echo $f | tr a-z A-Z)" want/$f
+done < nlsteps.txt
+rc 80 0
+same "step 80: no newline at end, CR LF file" CRNL.TXT want/crnl.txt
+
 if [ "$breaks" = 1 ]; then
     rc 37 2
     same "step 37: Ctrl-Break, file unchanged" sub/k.c orig/hello.c
@@ -563,7 +607,7 @@ if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftove
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|patch16t\.exe|M\.ORG|fd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patch16t\.exe|M\.ORG|fd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------
