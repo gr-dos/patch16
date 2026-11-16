@@ -224,6 +224,11 @@ there_is_another_patch()
     if (verbosity == VERBOSE)
 	say ("Hmm...");
     diff_type = intuit_diff_type();
+    /* patch16: an empty or garbled patch is an error, as in later GNU
+       releases, not a success that changes nothing; 2.2 exited 0.  A
+       patch of only Git changes patch16 does not make was reported.  */
+    if (diff_type == NO_DIFF && p_base == 0 && !p_not_applied)
+	fatal ("only garbage was found in the patch input");
     if (diff_type == NO_DIFF) {
 	if (verbosity == VERBOSE)
 	  say (p_base

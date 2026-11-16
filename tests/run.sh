@@ -124,6 +124,21 @@ udiff long.txt > long.pat
 cp orig/long.txt long.txt
 { hdr 9; printf '@@ -1,1 +1,2 @@\n first\n+%s\n' "$(long 16382)"; } > mal/m9.pat
 
+# truncated and empty patches: each leaves its file unchanged; a hunk cut
+# short is rejected (1) -- 2.2 takes missing lines as blank ones chopped
+# in transit, which then do not match -- and the rest are errors (2)
+mkdir trunc
+for n in 1 2 3 4 5 6 7 8; do cp orig/hello.c trunc/t$n.c; done
+thdr() { printf -- '--- a/t%s.c\n+++ b/t%s.c\n' "$1" "$1"; }
+{ thdr 1; printf '@@ -1,3 +1,4 @@\n first\n+new\n'; } > trunc/t1.pat
+{ thdr 2; printf '@@ -1,3 +1,4 @@\n first\n+new\n second\n thi'; } > trunc/t2.pat
+printf -- '*** a/t3.c\n--- b/t3.c\n***************\n*** 1,3 ****\n--- 1,4 ----\n  first\n+ new\n' > trunc/t3.pat
+printf -- '*** a/t4.c\n--- b/t4.c\n***************\n*** 1,3 ****\n  first\n  second\n' > trunc/t4.pat
+printf '1a2\n' > trunc/t5.pat
+{ thdr 6; printf '@@ -1,3 +1,4 @@\n'; } > trunc/t6.pat
+: > trunc/t7.pat
+head -c 2000 /dev/urandom | tr -d '\n' > trunc/t8.pat
+
 # the line index: files whose line counts are at and around an index
 # block (1024 lines), changed at both ends; a 20000-byte line copied
 # through; and a line over the 32000-byte limit, which is refused
@@ -283,6 +298,24 @@ call ..\rc 27
 call ..\rc 28
 ..\patch16 -p1 -i m9.pat >..\o29.txt
 call ..\rc 29
+cd ..\trunc
+rem --- truncated: 91 to 93 rejected (1), 94 to 98 fail (2)
+..\patch16 -p1 -i t1.pat >..\o91.txt
+call ..\rc 91
+..\patch16 -p1 -i t2.pat >..\o92.txt
+call ..\rc 92
+..\patch16 -p1 -i t3.pat >..\o93.txt
+call ..\rc 93
+..\patch16 -p1 -i t4.pat >..\o94.txt
+call ..\rc 94
+..\patch16 t5.c t5.pat >..\o95.txt
+call ..\rc 95
+..\patch16 -p1 -i t6.pat >..\o96.txt
+call ..\rc 96
+..\patch16 t7.c t7.pat >..\o97.txt
+call ..\rc 97
+..\patch16 t8.c t8.pat >..\o98.txt
+call ..\rc 98
 cd ..
 rem --- the largest hunk and the longest line apply
 patch16 -p1 -i huge.pat >o30.txt
@@ -572,6 +605,15 @@ for n in 1 2 3 4 5 6 7 8 9; do
     rc 2$n 2
     same "step 2$n: file unchanged" mal/m$n.c orig/hello.c
 done
+for n in 1 2 3 4 5 6 7 8; do
+    case $n in 1|2|3) want=1 ;; *) want=2 ;; esac
+    rc 9$n $want
+    f=trunc/t$n.c; [ -f $f ] || f=trunc/T$n.C
+    same "step 9$n: truncated patch, file unchanged" $f orig/hello.c
+done
+for n in 1 2 3; do
+    if [ -f trunc/T$n.REJ ]; then ok; else not_ok "step 9$n: reject written"; fi
+done
 rc 30 0
 same "step 30: largest hunk" HUGE.TXT want/huge.txt
 rc 31 0
@@ -682,7 +724,7 @@ if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftove
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patch16t\.exe|M\.ORG|fd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|trunc|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patch16t\.exe|M\.ORG|fd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------

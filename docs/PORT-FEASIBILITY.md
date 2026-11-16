@@ -157,6 +157,7 @@ So memory no longer grows with the size of the file, only with the largest hunk:
 - **Temporary files:** made with function 5Ah, which creates the file under a name DOS makes unique, in the current directory (after `-d`). A target named by a relative path is therefore on the same drive, so the install is all renames; one named on another drive is copied in, with the original kept aside until the copy is complete.
 - **Ctrl-Break:** an INT 23h handler runs GNU patch's cleanup and exits 2, and is ignored between the install's renames; critical errors (INT 24h) fail the DOS call instead of offering Abort, which would skip the cleanup.
 - **Read-only files** are refused, with their hunks saved as rejects.
+- **Truncated and empty patches:** a hunk cut short is rejected (exit 1): 2.2 takes the missing lines as blank lines lost in transit, and they then fail to match. A header with no hunk, or a context or normal diff cut short, is an error (exit 2). A patch with nothing recognisable, including an empty one, is an error (`only garbage was found in the patch input`, exit 2), as in later GNU releases; 2.2 exited 0. In every case the file is unchanged (steps 91–98).
 
 ### 5.1 Binary mode, CRLF and `^Z`
 
@@ -172,6 +173,8 @@ Then:
 - **matching:** compare original lines without their terminator;
 - **output:** write each original line's terminator back unchanged; give added lines the terminator style the target mostly uses (exact rule and tests in E4);
 - **`^Z`:** an ordinary byte. No implicit EOF (DESIGN.md §7).
+
+**Done in E2.** A patch line's CR before LF is dropped as it is read. An input line's CR LF matches a patch line's LF, and `-l` ignores the CR too. Added lines and `-D`'s lines take the line end most of the file's lines have, with a tie going to LF; a file with no line ends takes the patch's majority. Lines copied from the input keep their own, so a mixed file stays mixed. Rejects are LF. Tests: steps 45–51 in `tests/run.sh`.
 
 ### 5.2 `\ No newline at end of file`
 
