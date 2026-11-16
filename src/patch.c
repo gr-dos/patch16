@@ -316,6 +316,9 @@ char **argv;
 	  skip_rest_of_patch = ! spew_output (&after_newline);
       }
 
+      /* patch16: close the input, which DOS cannot rename while open.  */
+      re_input ();
+
       /* and put the output where desired */
       ignore_signals ();
       if (!skip_rest_of_patch && !output) {
@@ -1130,6 +1133,7 @@ fatal_exit (sig)
 static void
 cleanup ()
 {
+  re_input ();
   p16_restore ();
   unlink (TMPINNAME);
   unlink (TMPOUTNAME);

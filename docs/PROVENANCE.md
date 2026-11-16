@@ -16,7 +16,7 @@ Where each source module comes from (DESIGN.md §3.4). Licensing is in `docs/LIC
 |---|---:|---|---|
 | `patch.c` | 1127 | Wall 1984–88; FSF 1989–97 | adapt: main loop, options, fuzz default `-F0`, safe install |
 | `pch.c` | 1533 | Wall 1986–88; FSF 1990–97 | adapt: bounded hunk sizes; add `\ No newline at end of file` handling; Git preamble |
-| `inp.c` | 501 | Wall 1986, 1988; FSF 1991–97 | adapt or replace plan A/B with a bounded, file-backed line index (PORT-FEASIBILITY.md §4) |
+| `inp.c` | 501 | Wall 1986, 1988; FSF 1991–97 | adapt: plans A and B replaced by a bounded, file-backed line index (PORT-FEASIBILITY.md §4) |
 | `util.c` | 681 | Wall 1986; FSF 1992–97 | adapt: `move_file`, `ask`, signals, `makedirs` and temp files move behind `compat/` |
 | `version.c` | 30 | Wall 1984–88; FSF 1989–97 | adapt: `patch16` version text |
 | `common.h`, `inp.h`, `pch.h`, `util.h`, `version.h` | | Wall / FSF | adapt |
@@ -56,6 +56,7 @@ Each change is commented `patch16:` in the source; `git log -p src/` shows it ag
 | `backupfile.c` | the default suffix is `.ORG` |
 | `basename.c` | `\` and `:` also end a directory or drive prefix |
 | `inp.c`, `pch.c` | every file opens binary, and a patch on standard input is read binary; RCS/SCCS checkout (`inp.c`) and `do_ed_script` (`pch.c`) are removed; `pch.c` checks hunk header numbers (`check_range`) and caps hunks at 15,992 lines and patch lines at 16,383 bytes, where 16-bit sizes would wrap |
+| `inp.c` | plans A and B (`plan_a`, `plan_b` and `ifetch`'s two halves) are replaced by patch16's `index_input`, `line_start` and a new `ifetch`: line-start offsets in 1024-entry blocks (beyond the first, in `TMPINNAME`, two cached), text read through two 8 KB windows; input lines up to 32,000 bytes; plan B's `Prereq:` search is kept. `re_input` closes the input before the output replaces it. |
 | `version.c` | adds the patch16 copyright line |
 
 ## Build scripts

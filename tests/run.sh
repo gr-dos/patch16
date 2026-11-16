@@ -114,6 +114,26 @@ udiff long.txt > long.pat
 cp orig/long.txt long.txt
 { hdr 9; printf '@@ -1,1 +1,2 @@\n first\n+%s\n' "$(long 16382)"; } > mal/m9.pat
 
+# the line index: files whose line counts are at and around an index
+# block (1024 lines), changed at both ends; a 20000-byte line copied
+# through; and a line over the 32000-byte limit, which is refused
+for n in 1023 1024 1025; do
+    awk -v n=$n 'BEGIN { for (i = 1; i <= n; i++) printf "row %d\n", i }' > orig/x$n.txt
+    awk -v n=$n '{ if (NR == 2) print "second"; else if (NR == n - 1) print "penultimate"; else print }
+                 END { print "appended" }' orig/x$n.txt > want/x$n.txt
+    udiff x$n.txt > x$n.pat
+    cp orig/x$n.txt x$n.txt
+done
+# (outside the hunk's context, where it would be a patch line)
+{ printf 'top\n1\n2\n3\n4\n%s\nbottom\n' "$(long 20000)"; } > orig/wide.txt
+{ printf 'TOP\n1\n2\n3\n4\n%s\nbottom\n' "$(long 20000)"; } > want/wide.txt
+udiff wide.txt > wide.pat
+cp orig/wide.txt wide.txt
+{ printf 'top\n%s\n' "$(long 32001)"; } > orig/over.txt
+{ printf 'TOP\n%s\n' "$(long 32001)"; } > want/over.txt
+udiff over.txt > over.pat
+cp orig/over.txt over.txt
+
 cat > rc.bat <<'EOF'
 @echo off
 if errorlevel 2 goto rc2
@@ -207,6 +227,17 @@ patch16 -p1 -i huge.pat >o30.txt
 call rc 30
 patch16 -p1 -i long.pat >o31.txt
 call rc 31
+rem --- the line index
+patch16 -p1 -i x1023.pat >o32.txt
+call rc 32
+patch16 -p1 -i x1024.pat >o33.txt
+call rc 33
+patch16 -p1 -i x1025.pat >o34.txt
+call rc 34
+patch16 -p1 -i wide.pat >o35.txt
+call rc 35
+patch16 -p1 -i over.pat >o36.txt
+call rc 36
 EOF
 
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 300 \
@@ -357,10 +388,20 @@ rc 30 0
 same "step 30: largest hunk" HUGE.TXT want/huge.txt
 rc 31 0
 same "step 31: longest line" LONG.TXT want/long.txt
+rc 32 0
+same "step 32: 1023 lines" X1023.TXT want/x1023.txt
+rc 33 0
+same "step 33: 1024 lines" X1024.TXT want/x1024.txt
+rc 34 0
+same "step 34: 1025 lines" X1025.TXT want/x1025.txt
+rc 35 0
+same "step 35: a 20000-byte line" WIDE.TXT want/wide.txt
+rc 36 2
+same "step 36: over the line limit, unchanged" over.txt orig/over.txt
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------
