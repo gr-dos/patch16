@@ -1,17 +1,14 @@
 # Build patch16.exe, GNU patch 2.2 for 16-bit MS-DOS, with Open Watcom and
 # libc16, in the compact memory model (docs/DESIGN.md, section 14).
-#   make                         build patch16.exe
+#   make                         fetch the pinned libc16 release into
+#                                build/libc16, then build patch16.exe
 #   make test                    run the tests (tests/run.sh) under DOSBox-X
-#   make LIBC16_ROOT=DIR         use another libc16 tree
-#
-# libc16 0.05 (rename, unlink, fseek, ftell) is not released yet, so
-# LIBC16_ROOT defaults to a libc16 checkout next to this one, built with
-# its make. Once 0.05 is released, scripts/fetch-libc16 will pin it.
+#   make LIBC16_ROOT=../libc16   use a libc16 checkout built with its make
 #
 # The Open Watcom toolchain is the one libc16 was built with: the libc16
 # tree's tools/fetch-watcom fetches it into build/tools.
 
-LIBC16_ROOT ?= ../libc16
+LIBC16_ROOT ?= build/libc16
 LIBC16_DIR  := $(if $(wildcard $(LIBC16_ROOT)/build/stage/VERSION),$(LIBC16_ROOT)/build/stage,$(LIBC16_ROOT))
 LIBC16      := $(LIBC16_DIR)/lib/LIBC16C.LIB
 TOOLS_ENV   := build/tools.env
@@ -45,6 +42,13 @@ build/obj/%.obj: %.c $(HDRS) $(LIBC16) $(TOOLS_ENV)
 build/include/patchlevel.h: VERSION
 	mkdir -p $(@D)
 	echo '#define PATCH_VERSION "$(VERSION) (GNU patch 2.2)"' > $@
+
+# The pinned libc16 release (scripts/fetch-libc16). A LIBC16_ROOT given
+# on the command line must already be built.
+ifeq ($(LIBC16_ROOT),build/libc16)
+$(LIBC16): scripts/fetch-libc16
+	scripts/fetch-libc16 $(LIBC16_ROOT)
+endif
 
 # The Open Watcom snapshot libc16 names, as shell assignments.
 $(TOOLS_ENV): $(LIBC16)
