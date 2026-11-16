@@ -88,6 +88,18 @@ static LINENUM maxfuzz = 0;
 
 static char serrbuf[BUFSIZ];
 
+/* patch16: the line end of lines patch16 writes into the output, which
+   are the patch's added lines and -D's lines: CR LF if the input file
+   mostly has CR LF, else LF; for a file with no line ends, as the patch
+   mostly has.  Lines copied from the input are written as they are.  */
+static char const *eol = "\n";
+static size_t eol_len = 1;
+
+static void put_eol PARAMS ((FILE *));
+static bool out_line PARAMS ((LINENUM));
+static void put_define PARAMS ((char const *));
+static bool same_line PARAMS ((char const *, size_t, char const *, size_t));
+
 char const program_name[] = "patch16";
 
 /* Apply a set of diffs as appropriate. */
@@ -176,8 +188,15 @@ char **argv;
 	init_reject(TMPREJNAME);
 
 	/* find out where all the lines are */
-	if (!skip_rest_of_patch)
+	if (!skip_rest_of_patch) {
+	    int crlf;
 	    scan_input (inname);
+	    crlf = input_eol ();
+	    if (crlf < 0)
+		crlf = pch_eol_crlf ();
+	    eol = crlf ? "\r\n" : "\n";
+	    eol_len = strlen (eol);
+	}
 
 	/* from here on, open no standard i/o files, because malloc */
 	/* might misfire and we can't catch it easily */
@@ -821,16 +840,16 @@ LINENUM where;
 		return FALSE;
 	    if (R_do_defines) {
 		if (def_state == OUTSIDE) {
-		    fprintf (fp, *after_newline + if_defined, R_do_defines);
+		    put_define (*after_newline + if_defined);
 		    def_state = IN_IFNDEF;
 		}
 		else if (def_state == IN_IFDEF) {
-		    fprintf (fp, *after_newline + else_defined);
+		    put_define (*after_newline + else_defined);
 		    def_state = IN_ELSE;
 		}
 		if (ferror (fp))
 		  write_fatal ();
-		*after_newline = pch_write_line (old, fp);
+		*after_newline = out_line (old);
 	    }
 	    last_frozen_line++;
 	    old++;
@@ -843,17 +862,17 @@ LINENUM where;
 		return FALSE;
 	    if (R_do_defines) {
 		if (def_state == IN_IFNDEF) {
-		    fprintf (fp, *after_newline + else_defined);
+		    put_define (*after_newline + else_defined);
 		    def_state = IN_ELSE;
 		}
 		else if (def_state == OUTSIDE) {
-		    fprintf (fp, *after_newline + if_defined, R_do_defines);
+		    put_define (*after_newline + if_defined);
 		    def_state = IN_IFDEF;
 		}
 		if (ferror (fp))
 		  write_fatal ();
 	    }
-	    *after_newline = pch_write_line (new, fp);
+	    *after_newline = out_line (new);
 	    new++;
 	}
 	else if (pch_char(new) != pch_char(old)) {
@@ -870,7 +889,7 @@ LINENUM where;
 		return FALSE;
 	    assert (*after_newline);
 	    if (R_do_defines) {
-	       fprintf (fp, not_defined, R_do_defines);
+	       put_define (not_defined);
 	       if (ferror (fp))
 		write_fatal ();
 	       def_state = IN_IFNDEF;
@@ -879,7 +898,7 @@ LINENUM where;
 	    do
 	      {
 		if (R_do_defines) {
-		    *after_newline = pch_write_line (old, fp);
+		    *after_newline = out_line (old);
 		}
 		last_frozen_line++;
 		old++;
@@ -887,7 +906,7 @@ LINENUM where;
 	    while (pch_char (old) == '!');
 
 	    if (R_do_defines) {
-		fprintf (fp, *after_newline + else_defined);
+		put_define (*after_newline + else_defined);
 		if (ferror (fp))
 		  write_fatal ();
 		def_state = IN_ELSE;
@@ -895,7 +914,7 @@ LINENUM where;
 
 	    do
 	      {
-		*after_newline = pch_write_line (new, fp);
+		*after_newline = out_line (new);
 		new++;
 	      }
 	    while (pch_char (new) == '!');
@@ -905,7 +924,7 @@ LINENUM where;
 	    old++;
 	    new++;
 	    if (R_do_defines && def_state != OUTSIDE) {
-		fprintf (fp, *after_newline + end_defined, R_do_defines);
+		put_define (*after_newline + end_defined);
 		if (ferror (fp))
 		  write_fatal ();
 		*after_newline = TRUE;
@@ -918,11 +937,11 @@ LINENUM where;
 	    return FALSE;
 	if (R_do_defines) {
 	    if (def_state == OUTSIDE) {
-		fprintf (fp, *after_newline + if_defined, R_do_defines);
+		put_define (*after_newline + if_defined);
 		def_state = IN_IFDEF;
 	    }
 	    else if (def_state == IN_IFNDEF) {
-		fprintf (fp, *after_newline + else_defined);
+		put_define (*after_newline + else_defined);
 		def_state = IN_ELSE;
 	    }
 	    if (ferror (fp))
@@ -931,15 +950,15 @@ LINENUM where;
 
 	do
 	  {
-	    if (!*after_newline  &&  putc ('\n', fp) == EOF)
-	      write_fatal ();
-	    *after_newline = pch_write_line (new, fp);
+	    if (!*after_newline)
+	      put_eol (fp);
+	    *after_newline = out_line (new);
 	    new++;
 	  }
 	while (new <= pat_end && pch_char (new) == '+');
     }
     if (R_do_defines && def_state != OUTSIDE) {
-	fprintf (fp, *after_newline + end_defined, R_do_defines);
+	put_define (*after_newline + end_defined);
 	if (ferror (fp))
 	  write_fatal ();
 	*after_newline = TRUE;
@@ -991,8 +1010,9 @@ copy_till (after_newline, lastline)
 	s = ifetch (++R_last_frozen_line, 0, &size);
 	if (size)
 	  {
-	    if ((!*after_newline  &&  putc ('\n', fp) == EOF)
-		|| ! fwrite (s, sizeof *s, size, fp))
+	    if (!*after_newline)
+	      put_eol (fp);
+	    if (! fwrite (s, sizeof *s, size, fp))
 	      write_fatal ();
 	    *after_newline = s[size - 1] == '\n';
 	  }
@@ -1047,11 +1067,67 @@ LINENUM suffix_fuzz;
 			 pch_line_len(pline) ))
 		return FALSE;
 	}
-	else if (size != pch_line_len (pline)
-		 || memcmp (p, pfetch (pline), size) != 0)
+	else if (! same_line (p, size, pfetch (pline), pch_line_len (pline)))
 	    return FALSE;
     }
     return TRUE;
+}
+
+/* patch16: whether input line P (SIZE bytes) is patch line PL (PLEN
+   bytes); an input line's CR LF matches the patch line's LF.  */
+
+static bool
+same_line (p, size, pl, plen)
+     char const *p;
+     size_t size;
+     char const *pl;
+     size_t plen;
+{
+    if (2 <= size && p[size - 2] == '\r' && p[size - 1] == '\n')
+	return (plen == size - 1 && pl[plen - 1] == '\n'
+		&& memcmp (p, pl, size - 2) == 0);
+    return size == plen && memcmp (p, pl, size) == 0;
+}
+
+/* patch16: write a line end, or patch line LINE, or -D's text FORMAT,
+   into the output with the file's line ends (eol).  out_line returns
+   whether LINE ended with one.  */
+
+static void
+put_eol (fp)
+     FILE *fp;
+{
+    if (fwrite (eol, 1, eol_len, fp) != eol_len)
+	write_fatal ();
+}
+
+static bool
+out_line (line)
+     LINENUM line;
+{
+    char const *p = pfetch (line);
+    size_t len = pch_line_len (line);
+    bool nl = len && p[len - 1] == '\n';
+
+    if (len - nl && ! fwrite (p, 1, len - nl, ofp))
+	write_fatal ();
+    if (nl)
+	put_eol (ofp);
+    return nl;
+}
+
+static void
+put_define (format)
+     char const *format;
+{
+    char const *s;
+
+    sprintf (buf, format, do_defines);
+    for (s = buf;  *s;  s++)
+	if (*s == '\n')
+	    put_eol (ofp);
+	else if (putc (*s, ofp) == EOF)
+	    write_fatal ();
 }
 
 /* Do two lines match with canonicalized white space? */
@@ -1065,6 +1141,7 @@ similar (a, alen, b, blen)
 {
   /* Ignore presence or absence of trailing newlines.  */
   alen  -=  alen && a[alen - 1] == '\n';
+  alen  -=  alen && a[alen - 1] == '\r';	/* patch16: and an input CR */
   blen  -=  blen && b[blen - 1] == '\n';
 
   for (;;)

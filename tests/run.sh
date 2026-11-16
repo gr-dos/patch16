@@ -168,6 +168,25 @@ if command -v mformat >/dev/null && command -v mcopy >/dev/null &&
     full=1
 fi
 
+# line ends: a patch's CR LF or LF matches either in the file, and added
+# lines take the line ends most of the file has (for a file with none,
+# the patch's); lines not changed keep theirs
+printf 'one\r\ntwo\r\nthree\r\n' > dl.txt
+printf -- '--- a/dl.txt\n+++ b/dl.txt\n@@ -1,3 +1,4 @@\n one\n-two\n+TWO\n+2b\n three\n' > dl.pat
+printf 'one\r\nTWO\r\n2b\r\nthree\r\n' > want/dl.txt
+printf 'one\ntwo\nthree\n' > ud.txt
+printf -- '--- a/ud.txt\r\n+++ b/ud.txt\r\n@@ -1,3 +1,3 @@\r\n one\r\n-two\r\n+TWO\r\n three\r\n' > ud.pat
+printf 'one\nTWO\nthree\n' > want/ud.txt
+printf 'one\r\ntwo\nthree\r\nfour\r\n' > mx.txt
+printf -- '--- a/mx.txt\n+++ b/mx.txt\n@@ -1,4 +1,5 @@\n one\n two\n+new\n three\n four\n' > mx.pat
+printf 'one\r\ntwo\nnew\r\nthree\r\nfour\r\n' > want/mx.txt
+: > em.txt
+printf -- '--- a/em.txt\r\n+++ b/em.txt\r\n@@ -0,0 +1,2 @@\r\n+a\r\n+b\r\n' > em.pat
+printf 'a\r\nb\r\n' > want/em.txt
+printf 'one\r\ntwo  words\r\nthree\r\n' > ws.txt
+printf -- '--- a/ws.txt\n+++ b/ws.txt\n@@ -1,3 +1,3 @@\n one\n-two words\n+2\n three\n' > ws.pat
+printf 'one\r\n2\r\nthree\r\n' > want/ws.txt
+
 cat > rc.bat <<'EOF'
 @echo off
 if errorlevel 2 goto rc2
@@ -272,6 +291,17 @@ patch16 -p1 -i wide.pat >o35.txt
 call rc 35
 patch16 -p1 -i over.pat >o36.txt
 call rc 36
+rem --- line ends
+patch16 -p1 -i dl.pat >o45.txt
+call rc 45
+patch16 -p1 -i ud.pat >o46.txt
+call rc 46
+patch16 -p1 -i mx.pat >o47.txt
+call rc 47
+patch16 -p1 -i em.pat >o48.txt
+call rc 48
+patch16 -l -p1 -i ws.pat >o49.txt
+call rc 49
 if not exist patch16t.exe goto nobreak
 rem --- Ctrl-Break: while applying it cleans up and exits 2; between the
 rem --- renames that install the file it is ignored
@@ -468,6 +498,17 @@ same "step 35: a 20000-byte line" WIDE.TXT want/wide.txt
 rc 36 2
 same "step 36: over the line limit, unchanged" over.txt orig/over.txt
 
+rc 45 0
+same "step 45: LF patch, CR LF file" DL.TXT want/dl.txt
+rc 46 0
+same "step 46: CR LF patch, LF file" UD.TXT want/ud.txt
+rc 47 0
+same "step 47: mixed file" MX.TXT want/mx.txt
+rc 48 0
+same "step 48: empty file, CR LF patch" EM.TXT want/em.txt
+rc 49 0
+same "step 49: -l, CR LF file" WS.TXT want/ws.txt
+
 if [ "$breaks" = 1 ]; then
     rc 37 2
     same "step 37: Ctrl-Break, file unchanged" sub/k.c orig/hello.c
@@ -506,7 +547,7 @@ if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftove
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|patch16t\.exe|M\.ORG|fd\.img|full\.txt|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|patch16t\.exe|M\.ORG|fd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------

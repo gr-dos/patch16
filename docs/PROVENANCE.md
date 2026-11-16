@@ -58,6 +58,7 @@ Each change is commented `patch16:` in the source; `git log -p src/` shows it ag
 | `basename.c` | `\` and `:` also end a directory or drive prefix |
 | `inp.c`, `pch.c` | every file opens binary, and a patch on standard input is read binary; RCS/SCCS checkout (`inp.c`) and `do_ed_script` (`pch.c`) are removed; `pch.c` checks hunk header numbers (`check_range`) and caps hunks at 15,992 lines and patch lines at 16,383 bytes, where 16-bit sizes would wrap |
 | `inp.c` | plans A and B (`plan_a`, `plan_b` and `ifetch`'s two halves) are replaced by patch16's `index_input`, `line_start` and a new `ifetch`: line-start offsets in 1024-entry blocks (beyond the first, in `TMPINNAME`, two cached), text read through two 8 KB windows; input lines up to 32,000 bytes; plan B's `Prereq:` search is kept. `re_input` closes the input before the output replaces it. |
+| `patch.c`, `pch.c`, `inp.c` (line ends) | `pget_line` drops one CR before a patch line's LF; `patch_match` takes an input line's CR LF as the patch line's LF (`same_line`), and `similar` (`-l`) ignores it; added lines and `-D`'s lines are written with the line ends most of the file has (`input_eol`), or the patch's for a file with none (`pch_eol_crlf`), through `out_line`, `put_eol` and `put_define`; lines copied from the input are unchanged; rejects have LF |
 | `version.c` | adds the patch16 copyright line |
 
 ## Build scripts

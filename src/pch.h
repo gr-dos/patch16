@@ -12,6 +12,7 @@ LINENUM pch_repl_lines PARAMS ((void));
 LINENUM pch_suffix_context PARAMS ((void));
 bool pch_swap PARAMS ((void));
 bool pch_write_line PARAMS ((LINENUM, FILE *));
+bool pch_eol_crlf PARAMS ((void));
 bool there_is_another_patch PARAMS ((void));
 char *pfetch PARAMS ((LINENUM));
 char pch_char PARAMS ((LINENUM));

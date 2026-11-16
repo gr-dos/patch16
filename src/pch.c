@@ -69,6 +69,8 @@ static LINENUM p_sline;			/* and the line number for it */
 static LINENUM p_hunk_beg;		/* line number of current hunk */
 static LINENUM p_efake = -1;		/* end of faked up lines--don't free */
 static LINENUM p_bfake = -1;		/* beg of faked up lines */
+static LINENUM p_crlf_lines;		/* patch16: lines read that ended CR LF */
+static LINENUM p_lf_lines;		/* patch16: and LF alone */
 
 static enum diff intuit_diff_type PARAMS ((void));
 static size_t pget_line PARAMS ((int));
@@ -1271,9 +1273,29 @@ pget_line (indent)
 	}
     }
 
+  /* patch16: a CR before the newline is not part of the line, so a
+     patch with DOS line ends reads as one without (the output takes the
+     target's line ends: patch.c).  */
+  if (2 <= i && b[i - 2] == '\r')
+    {
+      b[i - 2] = '\n';
+      i--;
+      p_crlf_lines++;
+    }
+  else
+    p_lf_lines++;
+
   b[i] = '\0';
   p_input_line++;
   return i;
+}
+
+/* patch16: whether most patch lines read so far ended in CR LF.  */
+
+bool
+pch_eol_crlf ()
+{
+  return p_lf_lines < p_crlf_lines;
 }
 
 static bool

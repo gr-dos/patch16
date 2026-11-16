@@ -55,6 +55,8 @@ static int xfd = -1;			/* blocks of the index, or -1 */
 static long *xblock[2];			/* two cached index blocks */
 static LINENUM xbase[2] = {-1, -1};	/* first entry of each, or -1 */
 static int xnext;			/* the cached block to replace next */
+static LINENUM crlf_lines;		/* input lines ending CR LF */
+static LINENUM lf_lines;		/* and LF alone */
 
 struct window
 {
@@ -193,8 +195,10 @@ index_input (filename)
   char const *rev = revision;
   size_t revlen = rev ? strlen (rev) : 0;
   size_t i = 0;
+  int prev = 0;				/* the byte before c */
 
   re_input ();
+  crlf_lines = lf_lines = 0;
   for (k = 0;  k < 2;  k++)
     {
       if (!xblock[k])
@@ -242,7 +246,13 @@ index_input (filename)
 		       filename, LINENUM_MAX_INPUT);
 	    }
 	  if (c == '\n')
-	    begin = at + 1;
+	    {
+	      begin = at + 1;
+	      if (prev == '\r')
+		crlf_lines++;
+	      else
+		lf_lines++;
+	    }
 	  else if (INPUT_LINE_MAX <= at - begin)
 	    fatal ("line %ld of %s is longer than %d bytes, patch16's limit",
 		   line, filename, INPUT_LINE_MAX);
@@ -261,6 +271,7 @@ index_input (filename)
 	      if (i == (size_t) -1  &&  ISSPACE ((unsigned char) c))
 		i = 0;
 	    }
+	  prev = c;
 	}
       here += n;
     }
@@ -292,6 +303,17 @@ index_input (filename)
       if ((xfd = open (TMPINNAME, O_RDONLY | O_BINARY)) < 0)
 	pfatal ("can't reopen file %s", TMPINNAME);
     }
+}
+
+/* patch16: the line ends most of the input's lines have: 1 for CR LF,
+   0 for LF alone, or -1 if no line has one (a tie is LF).  */
+
+int
+input_eol ()
+{
+  if (!crlf_lines && !lf_lines)
+    return -1;
+  return lf_lines < crlf_lines;
 }
 
 /* patch16: the offset of line SLOT + 1's start; SLOT input_lines is the
