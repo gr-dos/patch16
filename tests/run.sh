@@ -47,7 +47,7 @@ udiff() {
 printf 'first\nsecond\nthird\n' > orig/hello.c
 printf 'first\nnew\nsecond\nthird\n' > want/hello.c
 udiff hello.c > hello.pat
-for f in a b c d e r s; do cp orig/hello.c $f.c; done
+for f in a b c d e f g r s; do cp orig/hello.c $f.c; done
 sed 's/hello\.c/a.c/g' hello.pat > a.pat
 sed 's/hello\.c/b.c/g' hello.pat > b.pat
 sed 's/hello\.c/d.c/g' hello.pat > d.pat
@@ -60,6 +60,15 @@ cp orig/hello.c sub/s.c
 printf -- '--- a/c.c\n+++ b/c.c\n@@ -1,3 +1,3 @@\n first\n-zzz\n+new\n third\n' \
     > c.pat
 printf 'stale\n' > C.RE1
+# a context line that does not match: rejected without fuzz, applied
+# with -F2 (it is the second line of the suffix context)
+sed 's/hello\.c/f.c/g; s/^ second$/ SECOND/' hello.pat > f.pat
+sed 's/hello\.c/g.c/g; s/^ second$/ SECOND/' hello.pat > g.pat
+# an ed script, which patch16 does not apply
+printf '1a\nnew\n.\n' > ed.pat
+# -d, and no -p: the file is found by its basename in sub
+sed 's#hello\.c#deep/dir/t.c#g' hello.pat > t.pat
+cp orig/hello.c sub/t.c
 
 # a round trip on a larger file: lines changed, added and deleted
 # throughout, in several hunks
@@ -130,6 +139,20 @@ attrib +r r.c
 patch16 -p1 -i r.pat >o14.txt
 call rc 14
 attrib -r r.c
+rem --- fuzz: none unless asked for
+patch16 -p1 -i f.pat >o15.txt
+call rc 15
+patch16 -F2 -p1 -i g.pat >o16.txt
+call rc 16
+rem --- no ed scripts, no -e
+patch16 a.c ed.pat >o17.txt
+call rc 17
+patch16 -e a.c ed.pat >o18.txt
+call rc 18
+rem --- -d, and no -p; the directory is current again afterwards
+patch16 -d sub -i ..\t.pat >o19.txt
+call rc 19
+cd >o20.txt
 EOF
 
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 300 \
@@ -235,7 +258,7 @@ rc 11 2
 rc 12 2
 rc 13 0
 check_version() {
-    head -1 O13.TXT | tr -d '\r' | grep -q "^patch $(cat "$top/VERSION") (GNU patch 2.2)\$"
+    head -1 O13.TXT | tr -d '\r' | grep -q "^patch16 $(cat "$top/VERSION") (GNU patch 2.2)\$"
 }
 if check_version; then ok; else not_ok "step 13: version"; fi
 
@@ -248,9 +271,33 @@ EOF
 same "step 14: read-only file unchanged" r.c orig/hello.c
 if tr -d '\r' < R.REJ | grep -q '^+ new$'; then ok; else not_ok "step 14: reject holds the hunk"; fi
 
+rc 15 1
+expect 15 <<'EOF'
+patching file f.c
+Hunk #1 FAILED at 1.
+1 out of 1 hunk FAILED--saving rejects to f.REJ
+EOF
+same "step 15: no fuzz" F.C orig/hello.c
+rc 16 0
+expect 16 <<'EOF'
+patching file g.c
+EOF
+same "step 16: fuzz 2" G.C want/hello.c
+rc 17 2
+same "step 17: ed script not applied" A.C want/hello.c
+rc 18 2
+rc 19 0
+expect 19 <<'EOF'
+patching file t.c
+EOF
+same "step 19: -d and basename" sub/T.C want/hello.c
+expect 20 <<'EOF'
+C:\
+EOF
+
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|ed\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------

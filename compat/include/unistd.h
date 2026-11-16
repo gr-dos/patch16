@@ -21,8 +21,5 @@ int isatty (int);
 int chdir (char const *);
 int creat (char const *, int);
 int getpid (void);
-int getuid (void);
-int link (char const *, char const *);
-int system (char const *);
 
 #endif

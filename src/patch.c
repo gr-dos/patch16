@@ -83,11 +83,12 @@ static char *rejname;
 static char const * volatile TMPREJNAME;
 
 static LINENUM last_offset;
-static LINENUM maxfuzz = 2;
+/* patch16: exact context unless -F asks for fuzz (decision 3).  */
+static LINENUM maxfuzz = 0;
 
 static char serrbuf[BUFSIZ];
 
-char const program_name[] = "patch";
+char const program_name[] = "patch16";
 
 /* Apply a set of diffs as appropriate. */
 
@@ -158,10 +159,10 @@ char **argv;
 	  skip_rest_of_patch = TRUE;
       }
 
-      if (diff_type == ED_DIFF) {
-	if (! dry_run)
-	  do_ed_script (ofp);
-      } else {
+      /* patch16: ed scripts are not applied (decision 5).  */
+      if (diff_type == ED_DIFF)
+	fatal ("this is an ed script, which patch16 does not apply");
+      {
 	int got_hunk;
 	bool rev_okayed = FALSE;
 	bool after_newline = TRUE;
@@ -338,7 +339,7 @@ char **argv;
 		}
 	    }
       }
-      if (diff_type != ED_DIFF) {
+      {
 	if (fclose (rejfp) != 0)
 	    write_fatal ();
 	if (failed) {
@@ -372,8 +373,8 @@ char **argv;
     if (ofp && (ferror (ofp) || fclose (ofp) != 0))
       write_fatal ();
     cleanup ();
-    if (somefailed)
-      exit (1);
+    /* patch16: through exit, which undoes -d (compat/dos.c).  */
+    exit (somefailed ? 1 : 0);
     return 0;
 }
 
@@ -406,7 +407,7 @@ reinitialize_almost_everything()
     skip_rest_of_patch = FALSE;
 }
 
-static char const shortopts[] = "bB:cd:D:eEfF:i:lnNo:p:r:RstuvV:x:Y:z:";
+static char const shortopts[] = "bB:cd:D:EfF:i:lnNo:p:r:RstuvV:x:Y:z:";
 static struct option const longopts[] =
 {
   {"backup", no_argument, NULL, 'b'},
@@ -414,7 +415,6 @@ static struct option const longopts[] =
   {"context", no_argument, NULL, 'c'},
   {"directory", required_argument, NULL, 'd'},
   {"ifdef", required_argument, NULL, 'D'},
-  {"ed", no_argument, NULL, 'e'},
   {"remove-empty-files", no_argument, NULL, 'E'},
   {"force", no_argument, NULL, 'f'},
   {"fuzz", required_argument, NULL, 'F'},
@@ -445,11 +445,10 @@ static char const * const option_help[] = {
 "Input options:",
 "",
 "  -p NUM  --strip=NUM  Strip NUM leading components from file names.",
-"  -F LINES  --fuzz LINES  Set the fuzz factor to LINES for inexact matching.",
+"  -F LINES  --fuzz LINES  Set the fuzz factor to LINES for inexact matching (default 0).",
 "  -l  --ignore-whitespace  Ignore white space changes between patch and input.",
 "",
 "  -c  --context  Interpret the patch as a context difference.",
-"  -e  --ed  Interpret the patch as an ed script.",
 "  -n  --normal  Interpret the patch as a normal difference.",
 "  -u  --unified  Interpret the patch as a unified difference.",
 "",
@@ -471,10 +470,10 @@ static char const * const option_help[] = {
 "  -V STYLE  --version-control=STYLE  Use STYLE version control.",
 "	STYLE is either 'simple', 'numbered', or 'existing'.",
 "",
-"  -b  --backup  Save the original contents of each file F into F.orig.",
+"  -b  --backup  Save the original contents of each file F.EXT into F.ORG.",
 "  -B PREFIX  --prefix=PREFIX  Prepend PREFIX to backup file names.",
 "  -Y PREFIX  --basename-prefix=PREFIX  Prepend PREFIX to backup file basenames.",
-"  -z SUFFIX  --suffix=SUFFIX  Append SUFFIX to backup file names.",
+"  -z SUFFIX  --suffix=SUFFIX  Use SUFFIX for backup file names (.EXT replaces the extension).",
 "",
 "Miscellaneous options:",
 "",
@@ -501,12 +500,12 @@ usage (stream, status)
   if (status != 0)
     {
       fprintf (stream, "%s: Try `%s --help' for more information.\n",
-	       program_name, Argv[0]);
+	       program_name, program_name);
     }
   else
     {
       fprintf (stream, "Usage: %s [OPTION]... [ORIGFILE [PATCHFILE]]\n\n",
-	       Argv[0]);
+	       program_name);
       for (p = option_help;  *p;  p++)
 	fprintf (stream, "%s\n", *p);
     }
@@ -564,9 +563,6 @@ get_some_switches()
 		break;
 	    case 'D':
 		do_defines = savestr (optarg);
-		break;
-	    case 'e':
-		diff_type = ED_DIFF;
 		break;
 	    case 'E':
 		remove_empty_files = TRUE;

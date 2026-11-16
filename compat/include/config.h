@@ -35,8 +35,6 @@ along with this program; see the file COPYING.
 /* DOS file names are 8.3; addext.c then uses the short forms.  */
 #undef HAVE_LONG_FILE_NAMES
 
-#define ED_PROGRAM "ed"
-
 /* Prototypes for every file, including getopt.c, which includes these
    itself only with the GNU C library.  */
 #include <stddef.h>

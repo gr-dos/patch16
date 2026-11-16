@@ -79,8 +79,35 @@ fstat (int fd, struct stat *st)
   return 0;
 }
 
-int
-chdir (char const *path)
+/* DOS has one current directory per drive, shared with the shell that
+   ran patch16, so -d's change is undone at exit (p16_exit): the drive
+   that was current, and the directory that was current on the drive -d
+   named. */
+static int dir_saved;
+static unsigned char home_drive;	/* 0 for A: */
+static char home_dir[3 + 64 + 1];	/* "X:\" and DOS's 64 bytes */
+
+static unsigned char
+current_drive (void)
+{
+  union REGS r;
+  r.h.ah = 0x19;
+  intdos (&r, &r);
+  return r.h.al;
+}
+
+static void
+select_drive (unsigned char drive)
+{
+  union REGS r;
+  r.h.ah = 0x0e;
+  r.h.dl = drive;
+  intdos (&r, &r);
+}
+
+/* INT 21h function 3Bh. */
+static int
+set_dir (char const *path)
 {
   union REGS r;
   struct SREGS s;
@@ -89,12 +116,61 @@ chdir (char const *path)
   r.x.dx = FP_OFF (path);
   s.ds = FP_SEG (path);
   intdosx (&r, &r, &s);
-  if (r.x.cflag)
+  return r.x.cflag ? -1 : 0;
+}
+
+int
+chdir (char const *path)
+{
+  union REGS r;
+  struct SREGS s;
+  char *dir = home_dir + 3;
+  unsigned char drive = current_drive ();
+  unsigned char target = drive;
+
+  if (path[0] && path[1] == ':')
+    target = (unsigned char) ((path[0] | 0x20) - 'a');
+  if (!dir_saved)
+    {
+      /* INT 21h function 47h: the directory, without "X:\". */
+      home_drive = drive;
+      home_dir[0] = (char) ('A' + target);
+      home_dir[1] = ':';
+      home_dir[2] = '\\';
+      segread (&s);
+      r.h.ah = 0x47;
+      r.h.dl = (unsigned char) (target + 1);
+      r.x.si = FP_OFF (dir);
+      s.ds = FP_SEG (dir);
+      intdosx (&r, &r, &s);
+      if (r.x.cflag)
+	{
+	  errno = ENOENT;
+	  return -1;
+	}
+      dir_saved = 1;
+    }
+  if (set_dir (path) != 0)
     {
       errno = ENOENT;
       return -1;
     }
+  if (target != drive)
+    select_drive (target);
   return 0;
+}
+
+#undef exit
+void
+p16_exit (int status)
+{
+  if (dir_saved)
+    {
+      dir_saved = 0;
+      set_dir (home_dir);
+      select_drive (home_drive);
+    }
+  exit (status);
 }
 
 int
@@ -151,50 +227,10 @@ atol (char const *s)
   return neg ? -(long) v : (long) v;
 }
 
-/* No RCS or SCCS checkout and no ed on DOS. */
-int
-system (char const *command)
-{
-  (void) command;
-  errno = ENOENT;
-  return -1;
-}
-
-FILE *
-popen (char const *command, char const *mode)
-{
-  (void) command;
-  (void) mode;
-  errno = ENOENT;
-  return 0;
-}
-
-int
-pclose (FILE *fp)
-{
-  (void) fp;
-  return -1;
-}
-
-int
-link (char const *from, char const *to)
-{
-  (void) from;
-  (void) to;
-  errno = EACCES;
-  return -1;
-}
-
 int
 getpid (void)
 {
   return 1;
-}
-
-int
-getuid (void)
-{
-  return 0;
 }
 
 /* Signals are not delivered yet: Ctrl-C ends the program as DOS does. */

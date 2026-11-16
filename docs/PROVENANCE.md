@@ -41,7 +41,7 @@ All by patch16 contributors, GPLv2-or-later, written for this port; no code take
 | `compat/include/config.h` | the fixed DOS configuration that replaces `configure` | build |
 | `compat/include/p16.h`, `unistd.h`, `signal.h`, `assert.h` | POSIX names GNU `patch` uses, mapped onto `libc16` and the adapters below | build |
 | `compat/fmt.c` | message formatter: `%s %c %d %ld %o %%` with a width, nothing else (decision 7) | `tests/run.sh` (messages) |
-| `compat/dos.c` | `isatty`, `fstat` (IOCTL 4400h), `chdir` (3Bh), `creat` (binary), `tmpnam` (5Ah), checked `atol`; stubs for `system`, `popen`, `link`, signals | `tests/run.sh` |
+| `compat/dos.c` | `isatty`, `fstat` (IOCTL 4400h), `chdir` (3Bh, selecting the drive; the drive and directory are restored by `p16_exit`), `creat` (binary), `tmpnam` (5Ah), checked `atol`; stubs for signals | `tests/run.sh` |
 | `compat/install.c` | safe install: the original moves aside before the new file goes in and is put back on failure; backups and rejects take the next free name, never replacing a file (decision 6); a read-only file is refused | `tests/run.sh` steps 1–9, 14 |
 
 ## Changes to upstream files
@@ -51,11 +51,12 @@ Each change is commented `patch16:` in the source; `git log -p src/` shows it ag
 | File | Change |
 |---|---|
 | `util.c` | `move_file` builds the backup name as before and calls `p16_move_file`; GNU's same-file search, which never ends on DOS (`st_ino` is always 0), is removed. `copy_file` opens binary. |
-| `patch.c` | generated reject names go through `p16_move_new` (`FOO.REJ`, `FOO.RE1`, …), and the message names the file used; `cleanup` restores an original that was moved aside; a read-only file is refused and its hunks go to the reject file; output and reject files open binary |
+| `patch.c` | generated reject names go through `p16_move_new` (`FOO.REJ`, `FOO.RE1`, …), and the message names the file used; `cleanup` restores an original that was moved aside; a read-only file is refused and its hunks go to the reject file; output and reject files open binary; the program name is `patch16`; fuzz defaults to 0; `-e` is gone and an ed script is a fatal error; `main` ends through `exit` |
 | `addext.c` | an extension beginning with `.` replaces the name's own (`FOO.C` → `FOO.ORG`) |
 | `backupfile.c` | the default suffix is `.ORG` |
 | `basename.c` | `\` and `:` also end a directory or drive prefix |
-| `inp.c`, `pch.c` | every file opens binary, and a patch on standard input is read binary |
+| `inp.c`, `pch.c` | every file opens binary, and a patch on standard input is read binary; RCS/SCCS checkout (`inp.c`) and `do_ed_script` (`pch.c`) are removed |
+| `version.c` | adds the patch16 copyright line |
 
 ## Build scripts
 

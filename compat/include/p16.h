@@ -37,10 +37,12 @@ void p16_perror (char const *);
 int fstat (int, struct stat *);
 char *tmpnam (char *);
 #define L_tmpnam 80
-FILE *popen (char const *, char const *);
-int pclose (FILE *);
 long atol (char const *);
 void abort (void);
+
+/* Every exit restores the directory -d changed (compat/dos.c).  */
+void p16_exit (int);
+#define exit p16_exit
 
 /* Installing patched files and rejects (compat/install.c).  */
 void p16_move_file (char const *, char const *, char *);

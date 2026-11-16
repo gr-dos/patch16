@@ -17,7 +17,6 @@ char *pfetch PARAMS ((LINENUM));
 char pch_char PARAMS ((LINENUM));
 int another_hunk PARAMS ((enum diff));
 size_t pch_line_len PARAMS ((LINENUM));
-void do_ed_script PARAMS ((FILE *));
 void open_patch_file PARAMS ((char const *));
 void re_patch PARAMS ((void));
 void set_hunkmax PARAMS ((void));

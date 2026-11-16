@@ -11,7 +11,8 @@
 
 static char const copyright_string[] = "\
 Copyright 1984, 1985, 1986, 1987, 1988 Larry Wall\n\
-Copyright 1989, 1990, 1991, 1992, 1993, 1997 Free Software Foundation, Inc.";
+Copyright 1989, 1990, 1991, 1992, 1993, 1997 Free Software Foundation, Inc.\n\
+Copyright 2026 patch16 contributors";
 
 static char const free_software_msgid[] = "\
 This program comes with NO WARRANTY, to the extent permitted by law.\n\
