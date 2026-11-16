@@ -4,7 +4,7 @@
 **Target:** Intel 8088/8086, MS-DOS 3.0+ and GR-DOS 4.00  
 **Implementation language:** C89-compatible C, limited 8086 assembly only where justified  
 **Toolchain:** Open Watcom C; `libc16` as the C runtime  
-**Source preference:** Larry Wall's 1988 `patch` 2.0, patchlevel 12, subject to provenance and licensing verification  
+**Source baseline:** GNU `patch` 2.2 (1997) under its published GPL-2.0-or-later terms. This was decided 2026-10-28 and supersedes the plan below to port Larry Wall's 1988 `patch` 2.0 pl12 directly; see `docs/LICENSE-RESEARCH.md` §8 and §14 below.  
 **Companion project:** `diff16` (separate; not a prerequisite)
 
 ## 1. Summary
@@ -304,7 +304,7 @@ The release must explicitly distinguish **Wall's authorship**, later project con
 ## 13. Historical and licensing references (starting points, not completed verification)
 
 - [GNU `patch` historical README and source mirror](https://github.com/mirror/patch) — credits Wall and records his authorization for GNU distribution under the GPL; modern source is not a license substitute for the exact 1988 snapshot.
-- [Preserved GNU `patch` README, GPLv2-or-later era](https://cgit.freebsd.org/src/tree/README?h=vendor%2Fmisc-GNU%2Fpatch&id=fea6cc68e36068e834e86474181b1e8edbae89df) — primary evidence of a historically GPLv2-or-later GNU distribution with Wall's copyright.
+- [GNU `patch` 2.2 README](https://github.com/mirror/patch/blob/bcce1233902dc7a94623b3a90cd7920c44f22474/README), [NEWS](https://github.com/mirror/patch/blob/bcce1233902dc7a94623b3a90cd7920c44f22474/NEWS) and [COPYING](https://github.com/mirror/patch/blob/bcce1233902dc7a94623b3a90cd7920c44f22474/COPYING) (tag `v2.2`, commit `bcce123…`; also in `https://git.savannah.gnu.org/git/patch.git`). These are primary evidence of the GPLv2-or-later distribution with Wall's copyright. They replace a FreeBSD cgit link that no longer resolves. No copy of the original `patch-2.2.tar.gz` was found (LICENSE-RESEARCH.md §8.1).
 - [GPLv1 text](https://www.gnu.org/licenses/old-licenses/gpl-1.0.html.en) and [GPLv2 text](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html) — chronology and terms; neither alone proves Wall's grant.
 - [GNU patch license transition discussion (2009)](https://lists.nongnu.org/archive/html/bug-patch/2009-12/msg00015.html) — later GPLv3 transition; not evidence that original 1988 source was GPLv3-only.
 - [X.Org historic releases](https://www.x.org/releases/X11R3/) — candidate for an original source snapshot; inspect the actual archive and its notices.
@@ -312,3 +312,25 @@ The release must explicitly distinguish **Wall's authorship**, later project con
 ---
 
 **Decision summary:** pursue Wall's 1988 `patch` as the preferred technical and historical baseline; **require a verified GPL license** before distributing any derivative; treat his original restrictive permission as a potential alternate grant **only if rights are verified for the complete modified work**, otherwise preserve it solely with historical context. Implement unified-diff support and DOS-specific extensions from permitted MIT/GPL/Wall code where suitable, otherwise clean-room; keep `libc16` additions MIT-only, avoid `*printf`, and exclude Schilling-authored code.
+
+## 14. Decisions (2026-10-28)
+
+Recorded from https://github.com/gr-dos/patch16/pull/1#issuecomment-6468026597. Where they conflict with the sections above, they take precedence.
+
+- **Baseline:** GNU `patch` 2.2 under GPL-2.0-or-later. Wall's 1988 notice is historical context only, never offered as an alternative license. GNU 2.2's unified-diff support may be reused. Other GPLv2-or-later GNU code may be reused with a provenance record. No Schilling-authored code.
+- **Interface:**
+  - `-n` keeps its historical meaning (normal diff); dry run is `--dry-run`.
+  - Exit status is 0 / 1 (rejects) / 2 (fatal), with tests and a compatibility note.
+  - Fuzz defaults to `-F0`; `-F` opts in.
+  - With no `-p`, the basename is used (historical behavior); `-p0`, `-p1`, … are explicit.
+  - `-e` and RCS/SCCS checkout are dropped; `-d` is deferred if it complicates v0.01; `-D` is kept.
+  - Backup and reject names replace the extension with `.ORG` and `.REJ`. Never overwrite silently; define handling for names that already end in those extensions.
+- **Formatting:** a `patch16`-local formatter limited to the conversions used, rejecting all others. No `*printf` in `libc16`.
+- **`libc16`:** add `rename`, `unlink`/`remove`, `fseek`/`ftell` as clean-room MIT members with regression tests, covering binary/text positioning and `ungetc`.
+- **Memory model:** compact; measure again after the bounded line index.
+- **Release gates that remain:**
+  - no 16-bit allocation or count overflow from hostile hunk headers or oversized files;
+  - bounded memory;
+  - binary-mode I/O with deliberate CRLF/`^Z` handling;
+  - collision-safe temp files and rollback;
+  - tests for malformed input at 16-bit boundaries and `diff -u` round trips.

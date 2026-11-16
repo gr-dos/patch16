@@ -1,0 +1,41 @@
+#!/bin/sh
+#
+# Fetch the patch16 baseline, GNU patch 2.2 (GPL-2.0-or-later), into DIR:
+# clone tag v2.2 of the GNU patch repository, check that it is the commit
+# and tree below, export that tree as DIR, and check every file against
+# upstream/MANIFEST.sha256. Reuses DIR if it already holds that tree.
+#
+# Tag v2.2 is the import of the original patch-2.2.tar.gz (released
+# 1997-04-17); no copy of that tarball has been found (see
+# docs/LICENSE-RESEARCH.md, section 8). The snapshot is a reference for
+# the files adapted into src/; docs/PROVENANCE.md lists which ones.
+#
+# usage: scripts/fetch-upstream [DIR]     (default: build/upstream/patch-2.2)
+#
+# PATCH_GIT, if set, is cloned instead (a mirror such as
+# https://github.com/mirror/patch.git); it must yield the same commit.
+
+set -eu
+
+commit=bcce1233902dc7a94623b3a90cd7920c44f22474
+tree=35098589ae46a13ab212e74fc6b0b710a44bbcb3
+
+repo=${PATCH_GIT:-https://git.savannah.gnu.org/git/patch.git}
+dir=${1:-build/upstream/patch-2.2}
+manifest=$(cd "$(dirname "$0")/.." && pwd)/upstream/MANIFEST.sha256
+stamp="$dir/.git-tree"
+
+if [ "$(cat "$stamp" 2>/dev/null)" != "$tree" ]; then
+  mkdir -p "$(dirname "$dir")"
+  git="$dir.git"
+  rm -rf "$git" "$dir" "$dir.tmp"
+  git clone -q --bare --depth 1 --branch v2.2 "$repo" "$git"
+  [ "$(git --git-dir="$git" rev-parse 'v2.2^{commit}')" = "$commit" ]
+  [ "$(git --git-dir="$git" rev-parse 'v2.2^{tree}')" = "$tree" ]
+  mkdir -p "$dir.tmp"
+  git --git-dir="$git" archive "$commit" | tar -x -C "$dir.tmp"
+  rm -rf "$git"
+  (cd "$dir.tmp" && sha256sum -c --quiet "$manifest")
+  mv "$dir.tmp" "$dir"
+  echo "$tree" > "$stamp"
+fi
