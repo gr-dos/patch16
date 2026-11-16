@@ -72,6 +72,21 @@ static LINENUM p_bfake = -1;		/* beg of faked up lines */
 static LINENUM p_crlf_lines;		/* patch16: lines read that ended CR LF */
 static LINENUM p_lf_lines;		/* patch16: and LF alone */
 
+/* patch16: Git changes patch16 cannot make (DESIGN.md section 6): a
+   binary change, a rename, a copy or a mode change.  intuit_diff_type
+   notes one in the section of a "diff --git" line, or a "Binary files
+   ... differ" line, with the file it names; one with no hunks is
+   reported when the scan passes it, one with hunks by
+   there_is_another_patch, which skips the hunks -- except that a mode
+   change with hunks has its text applied, with a note.  */
+static char *git_name;			/* the file of the section */
+static char const *git_unsupported;	/* what it does, or 0 */
+static bool git_mode;			/* the section changes the mode */
+static int p_not_applied;		/* such changes reported */
+static void git_report PARAMS ((void));
+static void git_section PARAMS ((char const *));
+static char const *find_text PARAMS ((char const *, char const *));
+
 static enum diff intuit_diff_type PARAMS ((void));
 static size_t pget_line PARAMS ((int));
 static size_t get_line PARAMS ((void));
@@ -227,6 +242,15 @@ there_is_another_patch()
     if (p_indent && verbosity != SILENT)
 	say ("(Patch is indented %d space%s.)\n", p_indent, p_indent==1?"":"s");
     skip_to(p_start,p_sline);
+    if (git_unsupported) {		/* patch16 */
+	git_report ();
+	skip_rest_of_patch = TRUE;
+	return TRUE;
+    }
+    if (git_mode && verbosity != SILENT)
+	say ("%s: patch16 does not change file modes; applying the text\n",
+	     git_name ? git_name : "a file");
+    git_mode = FALSE;
     while (!inname) {
 	if (force || batch) {
 	    say ("No file to patch.  Skipping...\n");
@@ -247,6 +271,92 @@ there_is_another_patch()
 	}
     }
     return TRUE;
+}
+
+/* patch16: report a Git change patch16 cannot make, if one is noted,
+   and forget the section.  */
+
+static void
+git_report ()
+{
+    if (git_mode && !git_unsupported)
+	git_unsupported = "a mode change";
+    git_mode = FALSE;
+    if (git_unsupported) {
+	say ("%s: patch16 does not apply %s; not changed\n",
+	     git_name ? git_name : "a file", git_unsupported);
+	p_not_applied++;
+    }
+    git_unsupported = 0;
+    if (git_name) {
+	free (git_name);
+	git_name = 0;
+    }
+}
+
+/* patch16: where T first occurs in S, or 0.  */
+
+static char const *
+find_text (s, t)
+     char const *s;
+     char const *t;
+{
+    size_t n = strlen (t);
+    for (;  *s;  s++)
+	if (strnEQ (s, t, n))
+	    return s;
+    return 0;
+}
+
+/* patch16: note what line S says about the current section.  */
+
+static void
+git_section (s)
+     char const *s;
+{
+    char const *t;
+
+    if (strnEQ (s, "diff --git ", 11)) {
+	git_report ();
+	/* The new name, the last word, as -p0 would see it.  */
+	t = s + strlen (s);
+	while (s < t && ISSPACE ((unsigned char) t[-1]))
+	    t--;
+	s = t;
+	while (!ISSPACE ((unsigned char) s[-1]))
+	    s--;
+	git_name = savebuf (s, t - s + 1);
+	git_name[t - s] = 0;
+    }
+    else if (strnEQ (s, "Binary files ", 13)) {
+	git_report ();
+	t = find_text (s, " and ");
+	if (t) {
+	    s = t + 5;
+	    t = find_text (s, " differ");
+	}
+	if (!t)
+	    t = s + strlen (s);
+	git_name = savebuf (s, t - s + 1);
+	git_name[t - s] = 0;
+	git_unsupported = "a binary change";
+    }
+    else if (strnEQ (s, "GIT binary patch", 16))
+	git_unsupported = "a binary change";
+    else if (strnEQ (s, "rename from ", 12) || strnEQ (s, "rename to ", 10))
+	git_unsupported = "a rename";
+    else if (strnEQ (s, "copy from ", 10) || strnEQ (s, "copy to ", 8))
+	git_unsupported = "a copy";
+    else if (strnEQ (s, "old mode ", 9) || strnEQ (s, "new mode ", 9))
+	git_mode = TRUE;
+}
+
+/* patch16: how many changes patch16 could not make were reported.  */
+
+int
+pch_not_applied ()
+{
+    return p_not_applied;
 }
 
 /* Determine what kind of diff is in the remaining part of the patch file. */
@@ -274,6 +384,7 @@ intuit_diff_type()
 
     name[OLD] = name[NEW] = name[INDEX] = 0;
     ok_to_create_file = FALSE;
+    git_report ();			/* patch16: nothing is noted yet */
     Fseek (pfp, p_base, SEEK_SET);
     p_input_line = p_bline - 1;
     for (;;) {
@@ -283,6 +394,7 @@ intuit_diff_type()
 	this_line = ftell(pfp);
 	indent = 0;
 	if (! pget_line (0)) {
+	    git_report ();		/* patch16: a section with no hunks */
 	    if (first_command_line >= 0) {
 					/* nothing but deletes!? */
 		p_start = first_command_line;
@@ -303,6 +415,7 @@ intuit_diff_type()
 	    else
 		indent++;
 	}
+	git_section (s);		/* patch16 */
 	for (t = s;  ISDIGIT (*t) || *t == ',';  t++)
 	  continue;
 	this_is_a_command = (ISDIGIT (*s) &&

@@ -185,6 +185,8 @@ Then:
 - reject binary patches (`GIT binary patch`, `Binary files … differ`) and mode-only, rename and copy changes with a clear message (DESIGN.md §6);
 - take `a/`/`b/` names with `-p1`.
 
+**Done in E2.** `pch.c` notes each section's `diff --git` line (its `b/` name), and a binary change (`GIT binary patch`, `Binary files … differ`), a rename, a copy or a mode change in it. Such a change is reported as `NAME: patch16 does not apply a rename; not changed`, its hunks are skipped, and the exit status is 1. The exception: a mode change that also has hunks has its text applied, with a note. New and deleted files, `index` and `similarity index` lines need nothing: 2.2 creates a new file and empties a deleted one, as with any diff (`-E` removes it). `tests/run.sh` applies a Git patch made with and without `--binary` that has each kind of change.
+
 ## 6. Formatted output (decision 7)
 
 The message functions `say`, `fatal`, `pfatal` and `ask` already go through one `vfprintf` path in `util.c`. Their 139 call sites plus `printf`/`fprintf`/`sprintf` use only `%s` ×104, `%ld` ×46, `%d` ×10, `%c` ×10, `%o` ×1 and `%3ld` ×1.

@@ -399,7 +399,7 @@ char **argv;
       write_fatal ();
     cleanup ();
     /* patch16: through exit, which undoes -d (compat/dos.c).  */
-    exit (somefailed ? 1 : 0);
+    exit (somefailed || pch_not_applied () ? 1 : 0);
     return 0;
 }
 

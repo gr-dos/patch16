@@ -14,7 +14,8 @@
 # patch16t.exe is the test build (make build/patch16t.exe), which raises
 # Ctrl-Break where P16BREAK says (tests/breakpt.c); without it those
 # steps are skipped.
-# The disk-full step needs mtools (mformat, mcopy, mdir) to make and read
+# The Git steps need git to make their patches; without it they are
+# skipped. The disk-full step needs mtools (mformat, mcopy, mdir) to make and read
 # a floppy image; without them it is skipped.
 #
 # Environment: DOSBOX (default dosbox-x), HOSTDIFF (default diff),
@@ -376,6 +377,45 @@ printf '%s\n' "$NL_CASES" | while read -r name old new; do
         nl=$((nl + 1))
     done
 done
+# Git: a text change, a new file and a deleted file apply; a binary
+# change (with --binary and without), a rename (with and without edits)
+# a copy and a mode change are reported as not applied (status 1); a
+# mode change with a text change has its text applied, with a note. gitb and gitp hold the old tree for each patch.
+gits=0
+if command -v git >/dev/null; then
+    mkdir repo
+    (
+        cd repo && git init -q &&
+        printf 'one\ntwo\nthree\n' > t1.c &&
+        head -c 300 /dev/urandom > img.bin &&
+        seq 1 20 > r_old.c && seq 100 130 > m_old.c && seq 200 230 > c_src.c &&
+        printf 'echo hi\n' > x.sh && printf 'echo hi\n' > e.sh &&
+        printf 'gone\nsoon\n' > d.c &&
+        git add . && git -c user.email=t@t -c user.name=t commit -q -m 1 &&
+        printf 'one\nTWO\nthree\n' > t1.c &&
+        head -c 300 /dev/urandom > img.bin &&
+        git mv r_old.c r_new.c && git mv m_old.c m_new.c &&
+        sed -i 's/^115$/one hundred fifteen/' m_new.c &&
+        cp c_src.c c_dst.c && chmod +x x.sh && chmod +x e.sh &&
+        printf 'echo there\n' >> e.sh &&
+        printf 'brand\nnew\n' > n.c && git add -A && git rm -q d.c &&
+        git diff --cached -M -C --find-copies-harder --binary > ../gitb.pat &&
+        git diff --cached -M -C --find-copies-harder > ../gitp.pat &&
+        mkdir ../gitb ../gitp ../want/git &&
+        git archive HEAD | tar -x -C ../gitb &&
+        git archive HEAD | tar -x -C ../gitp &&
+        git archive HEAD | tar -x -C ../want/git &&
+        cp t1.c n.c e.sh ../want/git/
+    ) && grep -q '^copy from c_src.c' gitp.pat && gits=1
+    rm -rf repo
+fi
+if [ "$gits" = 1 ]; then
+    for g in gitb gitp; do
+        printf '%s\n' "cd $g" "..\\patch16 -p1 -i ..\\$g.pat >..\\o$g.txt" \
+            "call ..\\rc $g" "cd .." >> steps.bat
+    done
+fi
+
 # and on a CR LF file, with an LF patch
 printf 'a\r\nb' > crnl.txt
 printf -- '--- a/crnl.txt\n+++ b/crnl.txt\n@@ -1,2 +1,2 @@\n a\n-b\n\\ No newline at end of file\n+c\n\\ No newline at end of file\n' > crnl.pat
@@ -569,6 +609,41 @@ done < nlsteps.txt
 rc 80 0
 same "step 80: no newline at end, CR LF file" CRNL.TXT want/crnl.txt
 
+if [ "$gits" = 1 ]; then
+    for g in gitb gitp; do
+        G=$(echo $g | tr a-z A-Z)
+        rc $G 1
+        expect $G <<'EOF'
+b/c_dst.c: patch16 does not apply a copy; not changed
+patching file d.c
+b/e.sh: patch16 does not change file modes; applying the text
+patching file e.sh
+b/img.bin: patch16 does not apply a binary change; not changed
+b/m_new.c: patch16 does not apply a rename; not changed
+Hunk #1 ignored at 13.
+1 out of 1 hunk ignored--saving rejects to m_old.REJ
+patching file n.c
+b/r_new.c: patch16 does not apply a rename; not changed
+patching file t1.c
+b/x.sh: patch16 does not apply a mode change; not changed
+EOF
+        same "$g: mode and text change" $g/E.SH want/git/e.sh
+        same "$g: text change" $g/T1.C want/git/t1.c
+        same "$g: new file" $g/N.C want/git/n.c
+        same "$g: binary file unchanged" $g/img.bin want/git/img.bin
+        same "$g: renamed file unchanged" $g/r_old.c want/git/r_old.c
+        same "$g: renamed and edited file unchanged" $g/m_old.c want/git/m_old.c
+        same "$g: copied file unchanged" $g/c_src.c want/git/c_src.c
+        absent "$g: no rename target" $g/R_NEW.C
+        absent "$g: no copy target" $g/C_DST.C
+        if [ -s $g/D.C ]; then not_ok "$g: deleted file not emptied"; else ok; fi
+    done
+elif command -v git >/dev/null; then
+    not_ok "Git steps: could not make the Git patches"
+else
+    echo "skipped: Git steps (no git)"
+fi
+
 if [ "$breaks" = 1 ]; then
     rc 37 2
     same "step 37: Ctrl-Break, file unchanged" sub/k.c orig/hello.c
@@ -607,7 +682,7 @@ if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftove
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patch16t\.exe|M\.ORG|fd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patch16t\.exe|M\.ORG|fd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------
