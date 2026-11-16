@@ -44,7 +44,7 @@ void abort (void);
    that tests/breakpt.c makes raise Ctrl-Break (compat/testpt.c is the
    empty one).  */
 void p16_init (void);
-void p16_test_point (int);
+void p16_test_point (int, char const *);
 
 /* Every exit restores the directory -d changed (compat/dos.c).  */
 void p16_exit (int);

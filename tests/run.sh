@@ -14,6 +14,9 @@
 # patch16t.exe is the test build (make build/patch16t.exe), which raises
 # Ctrl-Break where P16BREAK says (tests/breakpt.c); without it those
 # steps are skipped.
+# The disk-full step needs mtools (mformat, mcopy, mdir) to make and read
+# a floppy image; without them it is skipped.
+#
 # Environment: DOSBOX (default dosbox-x), HOSTDIFF (default diff),
 #              KEEP=1 to keep the work directory.
 
@@ -145,6 +148,25 @@ cp orig/hello.c sub/k.c
 for f in k m n; do sed "s/hello\.c/$f.c/g" hello.pat > $f.pat; done
 cp orig/hello.c m.c
 cp orig/hello.c n.c
+# the new file lost between moving the original aside and moving it in:
+# the original is put back, with and without -b
+for f in q u; do sed "s/hello\.c/$f.c/g" hello.pat > $f.pat; cp orig/hello.c $f.c; done
+
+# a disk full: a 360 KB floppy image with big.txt, big.pat and a filler
+# leaving 40 KB, too little for the 75 KB patched file
+full=0
+if command -v mformat >/dev/null && command -v mcopy >/dev/null &&
+    command -v mdir >/dev/null; then
+    mformat -C -f 360 -i fd.img :: &&
+    mcopy -i fd.img orig/big.txt big.pat :: &&
+    free=$(mdir -i fd.img :: | sed -n 's/^ *\([0-9 ]*\) bytes free.*/\1/p' | tr -d ' ') &&
+    fill=$((free - 40960)) &&
+    [ "$fill" -gt 0 ] && [ "$fill" -lt 368640 ] &&
+    head -c "$fill" /dev/zero > filler.bin &&
+    mcopy -i fd.img filler.bin :: &&
+    rm filler.bin &&
+    full=1
+fi
 
 cat > rc.bat <<'EOF'
 @echo off
@@ -263,7 +285,23 @@ call rc 39
 patch16t -p1 -i n.pat >o40.txt
 call rc 40
 set P16BREAK=
+set P16LOSE=2
+patch16t -p1 -i q.pat >o41.txt
+call rc 41
+patch16t -b -p1 -i u.pat >o42.txt
+call rc 42
+set P16LOSE=
 :nobreak
+if not exist fd.img goto nofull
+rem --- a disk full: patch16 fails and the original is kept
+imgmount a fd.img -t floppy >nul
+a:
+c:\patch16 -p1 -i big.pat >c:\o43.txt
+call c:\rc 43
+c:
+dir a:\ >o44.txt
+imgmount -u a >nul
+:nofull
 EOF
 
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 300 \
@@ -299,6 +337,11 @@ expect() {
         not_ok "step $1: output differs"
         diff want.txt got.txt | sed 's/^/    /'
     fi
+}
+
+# absent WHAT FILE
+absent() {
+    if [ -e "$2" ]; then not_ok "$1: $2 exists"; else ok; fi
 }
 
 # same WHAT FILE EXPECTED-FILE: byte for byte; DOS names are upper case
@@ -436,15 +479,34 @@ EOF
     same "step 39: backup" M.ORG orig/hello.c
     rc 40 0
     same "step 40: Ctrl-Break ignored while installing" N.C want/hello.c
+    rc 41 2
+    same "step 41: original put back" Q.C orig/hello.c
+    rc 42 2
+    same "step 42: original put back from its backup" U.C orig/hello.c
+    absent "step 42: no backup left" U.ORG
 else
-    echo "skipped: Ctrl-Break steps (no $texe)"
+    echo "skipped: Ctrl-Break and rollback steps (no $texe)"
+fi
+if [ "$full" = 1 ]; then
+    rc 43 2
+    mcopy -n -i fd.img ::big.txt full.txt
+    same "step 43: disk full, original kept" full.txt orig/big.txt
+    if tr -d '\r' < O44.TXT | grep -q '^ *3 File(s)' &&
+        tr -d '\r' < O44.TXT | grep -q ' 40,960 Bytes free'; then
+        ok
+    else
+        not_ok "step 44: files left on the full disk"
+        tr -d '\r' < O44.TXT | sed 's/^/    /'
+    fi
+else
+    echo "skipped: disk-full step (no mtools)"
 fi
 leftover=$(ls sub | grep -v -x -E 'S\.C|T\.C|t\.c|k\.c|s\.c')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftover; fi
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|patch16t\.exe|M\.ORG|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|patch16t\.exe|M\.ORG|fd\.img|full\.txt|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------

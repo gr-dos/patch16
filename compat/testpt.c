@@ -7,7 +7,8 @@
 
 /* tests/breakpt.c takes its place in tests/patch16t.exe.  */
 void
-p16_test_point (int point)
+p16_test_point (int point, char const *name)
 {
   (void) point;
+  (void) name;
 }

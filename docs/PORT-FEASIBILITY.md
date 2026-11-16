@@ -150,6 +150,14 @@ So memory no longer grows with the size of the file, only with the largest hunk:
 | backup/reject names | adapt `addext.c` | `.ORG` / `.REJ` **replace** the extension (`FOO.C` → `FOO.ORG`). If the name already ends in `.ORG` or `.REJ`, or the result exists, use 5Bh (create new) to pick `FOO.OR1`… or fail. Never overwrite silently (decision 6). |
 | Ctrl-Break | `compat/` | clean up temp files, exit 2 |
 
+**Status (E2):** done in `compat/install.c` and `compat/dos.c`, with tests in `tests/run.sh`:
+
+- **Safe install:** as above. A failure, or a fatal error, between the renames puts the original back; tested by losing the new file at that point, with and without `-b`.
+- **Disk full:** the patched file is written to a temporary file first, so a full disk fails the write (exit 2) with the original untouched and the temporary files removed; tested on a nearly full 360 KB floppy image.
+- **Temporary files:** made with function 5Ah, which creates the file under a name DOS makes unique, in the current directory (after `-d`). A target named by a relative path is therefore on the same drive, so the install is all renames; one named on another drive is copied in, with the original kept aside until the copy is complete.
+- **Ctrl-Break:** an INT 23h handler runs GNU patch's cleanup and exits 2, and is ignored between the install's renames; critical errors (INT 24h) fail the DOS call instead of offering Abort, which would skip the cleanup.
+- **Read-only files** are refused, with their hunks saved as rejects.
+
 ### 5.1 Binary mode, CRLF and `^Z`
 
 `libc16` text mode translates `\r\n` and **stops at `^Z`**. That also makes plan A's `read(...) != size` check fail on any CRLF file. All of `patch16`'s files must be opened binary:

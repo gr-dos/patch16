@@ -295,7 +295,7 @@ char **argv;
 		    say (".\n");
 		}
 	    }
-	    p16_test_point (1);	/* patch16: tests/breakpt.c */
+	    p16_test_point (1, inname);	/* patch16: tests/breakpt.c */
 	}
 
 	if (got_hunk < 0  &&  using_plan_a) {
