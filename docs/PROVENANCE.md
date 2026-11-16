@@ -55,7 +55,7 @@ Each change is commented `patch16:` in the source; `git log -p src/` shows it ag
 | `addext.c` | an extension beginning with `.` replaces the name's own (`FOO.C` → `FOO.ORG`) |
 | `backupfile.c` | the default suffix is `.ORG` |
 | `basename.c` | `\` and `:` also end a directory or drive prefix |
-| `inp.c`, `pch.c` | every file opens binary, and a patch on standard input is read binary; RCS/SCCS checkout (`inp.c`) and `do_ed_script` (`pch.c`) are removed |
+| `inp.c`, `pch.c` | every file opens binary, and a patch on standard input is read binary; RCS/SCCS checkout (`inp.c`) and `do_ed_script` (`pch.c`) are removed; `pch.c` checks hunk header numbers (`check_range`) and caps hunks at 15,992 lines and patch lines at 16,383 bytes, where 16-bit sizes would wrap |
 | `version.c` | adds the patch16 copyright line |
 
 ## Build scripts

@@ -86,6 +86,34 @@ printf 'one\r\nTWO\r\nthree\032\r\nfour\rfive\r\nsix\r\n' > want/crlf.txt
 udiff crlf.txt > crlf.pat
 cp orig/crlf.txt crlf.txt
 
+# hostile and boundary hunk headers (16-bit sizes), each its own file
+# so that a failure cannot spill into the next
+mkdir mal
+for n in 1 2 3 4 5 6 7 8 9; do cp orig/hello.c mal/m$n.c; done
+hdr() { printf -- '--- a/m%s.c\n+++ b/m%s.c\n' "$1" "$1"; }
+{ hdr 1; printf '@@ -1,16384 +1,16384 @@\n first\n'; } > mal/m1.pat
+{ hdr 2; printf '@@ -1,65536 +1,1 @@\n first\n'; } > mal/m2.pat
+{ hdr 3; printf '@@ -1,99999999999 +1,1 @@\n first\n'; } > mal/m3.pat
+{ hdr 4; printf '@@ -1,-5 +1,3 @@\n first\n'; } > mal/m4.pat
+{ hdr 5; printf '@@ -2147483647,1 +2147483647,1 @@\n first\n'; } > mal/m5.pat
+{ printf -- '*** a/m6.c\n--- b/m6.c\n***************\n*** 10,5 ****\n'; } > mal/m6.pat
+{ printf '1,70000c1\n< first\n---\n> new\n'; } > mal/m7.pat
+# the largest hunk patch16 takes, and one line more
+: > orig/huge.txt
+awk 'BEGIN { for (i = 1; i <= 15992; i++) printf "%d\n", i }' > want/huge.txt
+udiff huge.txt > huge.pat
+cp orig/huge.txt huge.txt
+{ hdr 8; printf '@@ -0,0 +1,15993 @@\n'
+  awk 'BEGIN { for (i = 1; i <= 15993; i++) printf "+%d\n", i }'; } > mal/m8.pat
+# the longest patch line (16383 bytes with its + and newline), and one
+# byte more
+long() { head -c "$1" /dev/zero | tr '\0' x; }
+printf 'first\n%s\n' "$(long 16381)" > want/long.txt
+printf 'first\n' > orig/long.txt
+udiff long.txt > long.pat
+cp orig/long.txt long.txt
+{ hdr 9; printf '@@ -1,1 +1,2 @@\n first\n+%s\n' "$(long 16382)"; } > mal/m9.pat
+
 cat > rc.bat <<'EOF'
 @echo off
 if errorlevel 2 goto rc2
@@ -153,6 +181,32 @@ rem --- -d, and no -p; the directory is current again afterwards
 patch16 -d sub -i ..\t.pat >o19.txt
 call rc 19
 cd >o20.txt
+rem --- hostile headers: 21 to 29 fail with status 2
+cd mal
+..\patch16 -p1 -i m1.pat >..\o21.txt
+call ..\rc 21
+..\patch16 -p1 -i m2.pat >..\o22.txt
+call ..\rc 22
+..\patch16 -p1 -i m3.pat >..\o23.txt
+call ..\rc 23
+..\patch16 -p1 -i m4.pat >..\o24.txt
+call ..\rc 24
+..\patch16 -p1 -i m5.pat >..\o25.txt
+call ..\rc 25
+..\patch16 -p1 -i m6.pat >..\o26.txt
+call ..\rc 26
+..\patch16 m7.c m7.pat >..\o27.txt
+call ..\rc 27
+..\patch16 -p1 -i m8.pat >..\o28.txt
+call ..\rc 28
+..\patch16 -p1 -i m9.pat >..\o29.txt
+call ..\rc 29
+cd ..
+rem --- the largest hunk and the longest line apply
+patch16 -p1 -i huge.pat >o30.txt
+call rc 30
+patch16 -p1 -i long.pat >o31.txt
+call rc 31
 EOF
 
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 300 \
@@ -295,9 +349,18 @@ expect 20 <<'EOF'
 C:\
 EOF
 
+for n in 1 2 3 4 5 6 7 8 9; do
+    rc 2$n 2
+    same "step 2$n: file unchanged" mal/m$n.c orig/hello.c
+done
+rc 30 0
+same "step 30: largest hunk" HUGE.TXT want/huge.txt
+rc 31 0
+same "step 31: longest line" LONG.TXT want/long.txt
+
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|ed\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------

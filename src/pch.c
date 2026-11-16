@@ -33,6 +33,17 @@ If not, write to the Free Software Foundation,
 
 #define INITHUNKMAX 125			/* initial dynamic allocation size */
 
+/* patch16: limits for untrusted patches on a 16-bit host.  Each of a
+   hunk's arrays must fit in 64 KB (p_line has 4-byte pointers), so
+   hunkmax stops at HUNKMAX_LIMIT; line numbers and counts in hunk
+   headers stay below LINENUM_LIMIT, so sums of two do not overflow; and
+   a patch line, with its newline and null, fits in BUF_LIMIT bytes,
+   which read () can also return as an int.  */
+#define HUNKMAX_LIMIT 16000
+#define HUNK_LINES_MAX (HUNKMAX_LIMIT - 8)
+#define LINENUM_LIMIT 1000000000L
+#define BUF_LIMIT 16384
+
 /* Patch (diff listing) abstract type. */
 
 static FILE *pfp;			/* patch file pointer */
@@ -64,6 +75,8 @@ static size_t pget_line PARAMS ((int));
 static size_t get_line PARAMS ((void));
 static bool incomplete_line PARAMS ((void));
 static bool grow_hunkmax PARAMS ((void));
+static void check_range PARAMS ((LINENUM, LINENUM, LINENUM));
+static void malformed PARAMS ((void));
 static void next_intuit_at PARAMS ((long, LINENUM));
 static void skip_to PARAMS ((long, LINENUM));
 
@@ -146,6 +159,9 @@ set_hunkmax()
 static bool
 grow_hunkmax()
 {
+    if (HUNKMAX_LIMIT / 2 < hunkmax)	/* patch16 */
+      fatal ("hunk at line %ld has more than %d lines, patch16's limit",
+	     p_hunk_beg, HUNK_LINES_MAX);
     hunkmax *= 2;
     assert (p_line && p_len && p_Char);
     if ((p_line = (char **) realloc (p_line, hunkmax * sizeof (*p_line)))
@@ -159,6 +175,23 @@ grow_hunkmax()
        Whatever is null will be allocated again from within plan_a (),
        of all places.  */
     return FALSE;
+}
+
+/* patch16: check a hunk header's FIRST line number and its count of
+   LINES, with OTHERS lines of the hunk already accounted for.  */
+
+static void
+check_range (first, lines, others)
+     LINENUM first;
+     LINENUM lines;
+     LINENUM others;
+{
+    if (first < 0 || LINENUM_LIMIT < first
+	|| lines < 0 || LINENUM_LIMIT < lines)
+	malformed ();
+    if (HUNK_LINES_MAX < lines + others)
+	fatal ("hunk at line %ld has %ld lines; patch16's limit is %d",
+	       p_input_line, lines + others, HUNK_LINES_MAX);
 }
 
 /* True if the remainder of the patch file contains a diff of some sort. */
@@ -604,6 +637,7 @@ another_hunk (difftype)
 		    p_ptrn_lines = 0;
 		    p_first = 1;
 		}
+		check_range (p_first, p_ptrn_lines, 0);
 		p_max = p_ptrn_lines + 6;	/* we need this much at least */
 		while (p_max >= hunkmax)
 		    if (! grow_hunkmax ())
@@ -677,6 +711,7 @@ another_hunk (difftype)
 			p_repl_lines = 0;
 			p_newfirst = 1;
 		    }
+		    check_range (p_newfirst, p_repl_lines, p_end);
 		    p_max = p_repl_lines + p_end;
 		    while (p_max >= hunkmax)
 			if (! grow_hunkmax ())
@@ -908,6 +943,8 @@ another_hunk (difftype)
 	if (*s == ' ') s++;
 	if (*s != '@')
 	    malformed ();
+	check_range (p_first, p_ptrn_lines, 0);
+	check_range (p_newfirst, p_repl_lines, p_ptrn_lines);
 	if (!p_ptrn_lines)
 	    p_first++;			/* do append rather than insert */
 	if (!p_repl_lines)
@@ -1056,6 +1093,8 @@ another_hunk (difftype)
 	    max = min;
 	if (hunk_type == 'd')
 	    min++;
+	check_range (p_first, p_ptrn_lines, 0);
+	check_range (min, max - min + 1, p_ptrn_lines);
 	p_end = p_ptrn_lines + 1 + max - min + 1;
 	while (p_end >= hunkmax)
 	  if (! grow_hunkmax ())
@@ -1205,6 +1244,9 @@ pget_line (indent)
     {
       if (i == s - 1)
 	{
+	  if (BUF_LIMIT / 2 < s)	/* patch16 */
+	    fatal ("line %ld of the patch is longer than %d bytes, patch16's limit",
+		   p_input_line + 1, BUF_LIMIT - 1);
 	  s *= 2;
 	  b = realloc (b, s);
 	  if (!b)
