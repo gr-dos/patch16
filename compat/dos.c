@@ -233,8 +233,45 @@ getpid (void)
   return 1;
 }
 
-/* Signals are not delivered yet: Ctrl-C ends the program as DOS does. */
+/* Ctrl-C and Ctrl-Break (INT 23h) are SIGINT. DOS calls INT 23h with
+   the program's own stack and registers as at the INT 21h call that saw
+   the key, and any DOS function may be called from it. GNU patch's
+   handler cleans up and exits (2); while it ignores SIGINT, around the
+   renames that install a file, this returns and DOS carries on. Before
+   GNU patch sets a handler, Ctrl-C exits (2) with the directory -d
+   changed put back. */
 static p16_sighandler handlers[SIGPIPE + 1];
+
+static void __interrupt __far
+on_break (void)
+{
+  p16_sighandler h = handlers[SIGINT];
+  if (h == SIG_IGN)
+    return;
+  if (h == SIG_DFL)
+    p16_exit (2);
+  h (SIGINT);
+}
+
+/* A critical error (INT 24h: a drive not ready, a write-protected disk)
+   fails the DOS call, which patch16 then reports and cleans up after,
+   rather than asking "Abort, Retry, Fail?", where Abort would end it
+   with no cleanup. FAIL needs DOS 3.0, as tmpnam does. */
+static int __cdecl __far
+on_critical (unsigned deverror, unsigned errcode, unsigned __far *devhdr)
+{
+  (void) deverror;
+  (void) errcode;
+  (void) devhdr;
+  return _HARDERR_FAIL;
+}
+
+void
+p16_init (void)
+{
+  _dos_setvect (0x23, on_break);
+  _harderr (on_critical);
+}
 
 p16_sighandler
 signal (int sig, p16_sighandler handler)

@@ -40,6 +40,12 @@ char *tmpnam (char *);
 long atol (char const *);
 void abort (void);
 
+/* Ctrl-Break and critical-error handlers (compat/dos.c), and a hook
+   that tests/breakpt.c makes raise Ctrl-Break (compat/testpt.c is the
+   empty one).  */
+void p16_init (void);
+void p16_test_point (int);
+
 /* Every exit restores the directory -d changed (compat/dos.c).  */
 void p16_exit (int);
 #define exit p16_exit

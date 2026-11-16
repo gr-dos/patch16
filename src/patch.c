@@ -101,6 +101,7 @@ char **argv;
 {
     bool somefailed = FALSE;
 
+    p16_init ();	/* patch16: Ctrl-Break and critical errors */
     setbuf(stderr, serrbuf);
 
     bufsize = 8 * 1024;
@@ -294,6 +295,7 @@ char **argv;
 		    say (".\n");
 		}
 	    }
+	    p16_test_point (1);	/* patch16: tests/breakpt.c */
 	}
 
 	if (got_hunk < 0  &&  using_plan_a) {

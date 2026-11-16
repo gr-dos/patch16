@@ -22,17 +22,24 @@ CFLAGS = -q -zq -zl -zld -x -mc -0 -os -s -bt=dos -w1 \
          -I$(LIBC16_DIR)/include
 
 # GNU patch 2.2's sources (src/, docs/PROVENANCE.md) and patch16's own
-# (compat/).
+# (compat/). The test build, build/patch16t.exe, replaces the empty test
+# hook (compat/testpt.c) with one that raises Ctrl-Break (tests/breakpt.c).
 SRCS = src/patch.c src/pch.c src/inp.c src/util.c src/version.c \
        src/addext.c src/argmatch.c src/backupfile.c src/basename.c \
        src/getopt.c src/getopt1.c src/memchr.c \
        compat/dos.c compat/fmt.c compat/install.c
-OBJS = $(patsubst %.c,build/obj/%.obj,$(SRCS))
+OBJS := $(patsubst %.c,build/obj/%.obj,$(SRCS))
+TOBJS := $(OBJS) build/obj/tests/breakpt.obj
+OBJS += build/obj/compat/testpt.obj
 HDRS = $(wildcard src/*.h compat/include/*.h) build/include/patchlevel.h
 
 patch16.exe: $(OBJS) $(LIBC16) $(TOOLS_ENV)
 	$(WATCOM_ENV) && wlink option quiet, nodefaultlibs, map=patch16.map \
 	  format dos name $@ $(foreach o,$(OBJS),file $(o)) library $(LIBC16)
+
+build/patch16t.exe: $(TOBJS) $(LIBC16) $(TOOLS_ENV)
+	$(WATCOM_ENV) && wlink option quiet, nodefaultlibs \
+	  format dos name $@ $(foreach o,$(TOBJS),file $(o)) library $(LIBC16)
 
 build/obj/%.obj: %.c $(HDRS) $(LIBC16) $(TOOLS_ENV)
 	mkdir -p $(@D)
@@ -56,10 +63,10 @@ $(TOOLS_ENV): $(LIBC16)
 	watcom=$$(sh $(LIBC16_DIR)/tools/fetch-watcom $(CURDIR)/build/tools) \
 	  && printf 'WATCOM=%s\nexport WATCOM\n' "$$watcom" > $@
 
-test: patch16.exe
-	sh tests/run.sh $(CURDIR)/patch16.exe
+test: patch16.exe build/patch16t.exe
+	sh tests/run.sh $(CURDIR)/patch16.exe $(CURDIR)/build/patch16t.exe
 
 clean:
-	rm -rf build/obj build/include patch16.exe patch16.map
+	rm -rf build/obj build/include build/patch16t.exe patch16.exe patch16.map
 
 .PHONY: test clean

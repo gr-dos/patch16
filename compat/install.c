@@ -137,6 +137,7 @@ p16_move_file (char const *from, char const *to, char *bakname)
 	say ("Saving the original %s as %s\n", to, aside);
       pending_file = to;
       pending_aside = aside;
+      p16_test_point (2);
     }
 
   if (rename (from, to) != 0)

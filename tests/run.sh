@@ -10,7 +10,10 @@
 # uses goto rather than "if errorlevel N echo ... >file" because the
 # DOSBox-X shell opens the redirection even when the test is false.
 #
-# Usage: tests/run.sh [path/to/patch16.exe]
+# Usage: tests/run.sh [path/to/patch16.exe [path/to/patch16t.exe]]
+# patch16t.exe is the test build (make build/patch16t.exe), which raises
+# Ctrl-Break where P16BREAK says (tests/breakpt.c); without it those
+# steps are skipped.
 # Environment: DOSBOX (default dosbox-x), HOSTDIFF (default diff),
 #              KEEP=1 to keep the work directory.
 
@@ -18,6 +21,7 @@ set -u
 
 top=$(cd "$(dirname "$0")/.." && pwd)
 exe=${1:-$top/patch16.exe}
+texe=${2:-$top/build/patch16t.exe}
 DOSBOX=${DOSBOX:-dosbox-x}
 HOSTDIFF=${HOSTDIFF:-diff}
 
@@ -36,6 +40,8 @@ export LC_ALL
 
 cd "$work" || exit 2
 cp "$exe" patch16.exe
+breaks=0
+if [ -f "$texe" ]; then cp "$texe" patch16t.exe; breaks=1; fi
 mkdir orig want
 
 # udiff NAME: a -p1 patch from orig/NAME to want/NAME, with a/ and b/
@@ -133,6 +139,12 @@ cp orig/wide.txt wide.txt
 { printf 'TOP\n%s\n' "$(long 32001)"; } > want/over.txt
 udiff over.txt > over.pat
 cp orig/over.txt over.txt
+
+# Ctrl-Break while applying (in sub, through -d) and while installing
+cp orig/hello.c sub/k.c
+for f in k m n; do sed "s/hello\.c/$f.c/g" hello.pat > $f.pat; done
+cp orig/hello.c m.c
+cp orig/hello.c n.c
 
 cat > rc.bat <<'EOF'
 @echo off
@@ -238,6 +250,20 @@ patch16 -p1 -i wide.pat >o35.txt
 call rc 35
 patch16 -p1 -i over.pat >o36.txt
 call rc 36
+if not exist patch16t.exe goto nobreak
+rem --- Ctrl-Break: while applying it cleans up and exits 2; between the
+rem --- renames that install the file it is ignored
+set P16BREAK=1
+patch16t -d sub -p1 -i ..\k.pat >o37.txt
+call rc 37
+cd >o38.txt
+set P16BREAK=2
+patch16t -b -p1 -i m.pat >o39.txt
+call rc 39
+patch16t -p1 -i n.pat >o40.txt
+call rc 40
+set P16BREAK=
+:nobreak
 EOF
 
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 300 \
@@ -399,9 +425,26 @@ same "step 35: a 20000-byte line" WIDE.TXT want/wide.txt
 rc 36 2
 same "step 36: over the line limit, unchanged" over.txt orig/over.txt
 
+if [ "$breaks" = 1 ]; then
+    rc 37 2
+    same "step 37: Ctrl-Break, file unchanged" sub/k.c orig/hello.c
+    expect 38 <<'EOF'
+C:\
+EOF
+    rc 39 0
+    same "step 39: Ctrl-Break ignored while installing" M.C want/hello.c
+    same "step 39: backup" M.ORG orig/hello.c
+    rc 40 0
+    same "step 40: Ctrl-Break ignored while installing" N.C want/hello.c
+else
+    echo "skipped: Ctrl-Break steps (no $texe)"
+fi
+leftover=$(ls sub | grep -v -x -E 'S\.C|T\.C|t\.c|k\.c|s\.c')
+if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftover; fi
+
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|patch16t\.exe|M\.ORG|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------

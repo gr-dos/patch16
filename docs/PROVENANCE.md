@@ -41,7 +41,8 @@ All by patch16 contributors, GPLv2-or-later, written for this port; no code take
 | `compat/include/config.h` | the fixed DOS configuration that replaces `configure` | build |
 | `compat/include/p16.h`, `unistd.h`, `signal.h`, `assert.h` | POSIX names GNU `patch` uses, mapped onto `libc16` and the adapters below | build |
 | `compat/fmt.c` | message formatter: `%s %c %d %ld %o %%` with a width, nothing else (decision 7) | `tests/run.sh` (messages) |
-| `compat/dos.c` | `isatty`, `fstat` (IOCTL 4400h), `chdir` (3Bh, selecting the drive; the drive and directory are restored by `p16_exit`), `creat` (binary), `tmpnam` (5Ah), checked `atol`; stubs for signals | `tests/run.sh` |
+| `compat/dos.c` | `isatty`, `fstat` (IOCTL 4400h), `chdir` (3Bh, selecting the drive; the drive and directory are restored by `p16_exit`), `creat` (binary), `tmpnam` (5Ah), checked `atol`; `signal` for SIGINT through an INT 23h handler (Ctrl-Break), and an INT 24h handler that fails critical errors (`p16_init`) | `tests/run.sh` steps 19–20, 37–40 |
+| `compat/testpt.c`, `tests/breakpt.c` | the empty test hook in `patch16.exe`, and the one in the test build that raises Ctrl-Break where `P16BREAK` says | `tests/run.sh` steps 37–40 |
 | `compat/install.c` | safe install: the original moves aside before the new file goes in and is put back on failure; backups and rejects take the next free name, never replacing a file (decision 6); a read-only file is refused | `tests/run.sh` steps 1–9, 14 |
 
 ## Changes to upstream files
