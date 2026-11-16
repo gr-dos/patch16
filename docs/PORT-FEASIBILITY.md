@@ -124,6 +124,20 @@ Replace plan A and plan B with one bounded, file-backed **line-offset index**:
 
 That is 4 bytes of disk per line, constant RAM, no `maxlen` padding, and `ifetch()`'s interface unchanged for `patch.c`. It can be written as a rework of 2.2's `inp.c` (GPL; DESIGN.md §3.4 allows adapting it). Cap hunk sizes as in §4.1. On-disk hunk staging can stay a later improvement.
 
+### 4.5 Measured after the line index (E2)
+
+Done as §4.1 and §4.4 recommend: hunk headers are checked and hunks capped at 15,992 lines, patch lines at 16,383 bytes and input lines at 32,000 bytes; the line index holds 1,024 offsets per block (two cached, the rest in a temporary file) and reads text through two 8 KB windows.
+
+`patch16.exe` 0.01 is 49,098 bytes. Free conventional memory each patch needed under DOSBox-X (8086), found by reserving memory with `LOADFIX` ahead of `patch16` (604 KB free without it):
+
+| Patch | Needs |
+|---|---|
+| 3-line file, one hunk | about 81 KB |
+| 3,000-line, 75 KB file, many hunks; 1,025-line file; a 20,000-byte input line | 83–88 KB |
+| one hunk of 15,992 added lines (the largest allowed) | 305–354 KB |
+
+So memory no longer grows with the size of the file, only with the largest hunk: about 32 KB of the base is the fixed working set (index blocks, windows and the 8 KB patch-line buffer). A program that needs about 90 KB fits beside a typical DOS 3.3 resident set on a 256 KB machine; very large hunks need correspondingly more, and fail with "out of memory" (exit 2) before any file changes. Staging hunks on disk would lift that and remains a later improvement.
+
 ## 5. DOS-specific work
 
 | Need | Where | Notes |
