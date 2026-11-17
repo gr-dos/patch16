@@ -310,8 +310,8 @@ EOF
                     else cp "$ws/$p.pat" "$rd/P.PAT"; fi
                 fi
                 want_tree "$ws/t" "$ws/w" "$e" "$dir/want/$run"
-                printf 'cd \\T\\%s\r\n\\PATCH16 -p1 -i P.PAT >O.TXT\r\ncall \\RC\r\n' \
-                    "$run" >> "$dir/dos/$p/RUN.BAT"
+                printf 'echo RUN %s\r\ncd \\T\\%s\r\n\\PATCH16 -p1 -i P.PAT >O.TXT\r\ncall \\RC\r\n' \
+                    "$run" "$run" >> "$dir/dos/$p/RUN.BAT"
                 echo "$run" >> "$dir/dos/$p/runs"
             done
         done
@@ -323,8 +323,11 @@ EOF
 # ------------------------------------------------------------------
 # check
 
+# check_runs DIR GOT P [CONSOLE]: CONSOLE is what the console showed (on
+# GR-DOS, through CTTY AUX), with "RUN <run>" before each run; a failed
+# run's part of it is shown, for patch16's standard error
 check_runs() {
-    dir=$1 got=$2 p=$3
+    dir=$1 got=$2 p=$3 console=${4:-}
     pass=0 fail=0
     for run in $(cat "$dir/dos/$p/runs"); do
         g=$got/T/$run
@@ -348,6 +351,9 @@ check_runs() {
             fail=$((fail + 1))
             echo "FAIL: $run: $bad"
             [ -f "$g/O.TXT" ] && tr -d '\r' < "$g/O.TXT" | sed 's/^/    /'
+            [ -n "$console" ] && [ -f "$console" ] &&
+                tr -d '\r' < "$console" |
+                awk -v r="RUN $run" '$0 == r { on = 1; next } /^RUN / { on = 0 } on { print "    console: " $0 }'
         fi
     done
     echo "$p: $pass passed, $fail failed"
@@ -382,7 +388,7 @@ run_grdos() {
             echo "FAIL: $p: the GR-DOS run did not finish"
             status=1
         fi
-        check_runs "$dir" "$dir/grdos-$p/got" "$p" || status=1
+        check_runs "$dir" "$dir/grdos-$p/got" "$p" "$dir/grdos-$p/serial.log" || status=1
     done
     return $status
 }

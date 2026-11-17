@@ -3,10 +3,11 @@
 # Run a DOS disk's RUN.BAT on GR-DOS, in QEMU: boot a copy of the pinned
 # GR-DOS floppy (scripts/fetch-grdos) in A:, with an AUTOEXEC.BAT that
 # runs B:\RUN.BAT, and the files of DIR on a new 1.44 MB floppy in B:.
-# AUTOEXEC.BAT reports to COM1 (OUT/serial.log) when it starts and ends;
-# QEMU is stopped at the end, or after TIMEOUT seconds. B:'s files are
-# then copied back to OUT/got. tests/corpus.sh uses it for the round-trip
-# corpus.
+# AUTOEXEC.BAT reports to COM1 (OUT/serial.log) when it starts and ends,
+# and CTTY AUX sends the console there in between, so that what programs
+# write to standard error is kept; QEMU is stopped at the end, or after
+# TIMEOUT seconds. B:'s files are then copied back to OUT/got.
+# tests/corpus.sh uses it for the round-trip corpus.
 #
 # usage: tests/grdos.sh DIR OUT
 #
@@ -27,7 +28,7 @@ mkdir -p "$out/got"
 
 cp "$img" "$out/a.img"
 chmod u+w "$out/a.img"
-printf '@ECHO OFF\r\nPATH A:\\\r\nECHO PATCH16-GRDOS-BEGIN>AUX\r\nB:\r\nCALL RUN.BAT\r\nA:\r\nECHO PATCH16-GRDOS-END>AUX\r\n' \
+printf '@ECHO OFF\r\nPATH A:\\\r\nECHO PATCH16-GRDOS-BEGIN>AUX\r\nCTTY AUX\r\nB:\r\nCALL RUN.BAT\r\nA:\r\nECHO PATCH16-GRDOS-END\r\n' \
     > "$out/AUTOEXEC.BAT"
 mcopy -o -i "$out/a.img" "$out/AUTOEXEC.BAT" ::AUTOEXEC.BAT
 
