@@ -2,20 +2,23 @@
 #
 # Make the files a patch16 release carries beside patch.exe, in DIR:
 #
-#   libc16-V-src.tar.gz    the source of the libc16 release linked into
-#                          patch.exe (V and the release archive's SHA-256
+#   patch16-V-src.tar.gz   patch16's corresponding source: the tree at the
+#                          commit being released (git archive of HEAD),
+#                          which dist16.source names for GR-DOS's dist16
+#   libc16-L-src.tar.gz    the source of the libc16 release linked into
+#                          patch.exe (L and the release archive's SHA-256
 #                          are the ones scripts/fetch-libc16 pins), made by
-#                          git archive from libc16's tag vV
+#                          git archive from libc16's tag vL
 #   LICENSE-libc16.txt     libc16's MIT notice, from that release archive
-#   GPL-2.0.txt            patch16's license (GNU patch 2.2's)
+#   GPL-2.0.txt            patch16's license (COPYING, GNU patch 2.2's)
 #   notes.md               where the source is, how to build it, the
 #                          licenses, and the checksums, for the release
 #                          description
 #
-# Run after make, which fetches the pinned libc16 release to build/libc16.
-# patch16's own corresponding source is the release tag (GitHub's source
-# archives of it): GNU patch 2.2 as adapted (src/), compat/, the Makefile
-# and scripts/, LICENSES/ and docs/PROVENANCE.md.
+# Run after make, which fetches the pinned libc16 release to build/libc16,
+# in a checkout with nothing changed, so that the source archive is the
+# source of the patch.exe beside it. scripts/check-source then rebuilds
+# patch.exe from the archive and compares the two.
 #
 # usage: scripts/release-files DIR          (patch16's version is VERSION)
 #
@@ -31,21 +34,52 @@ lv=$(sed -n 's/^version=//p' "$top/scripts/fetch-libc16")
 lsha=$(sed -n 's/^sha256=//p' "$top/scripts/fetch-libc16")
 libc16=$top/build/libc16
 git_url=${LIBC16_GIT:-https://github.com/gr-dos/libc16.git}
+die() { echo "$0: $*" >&2; exit 1; }
 
 # the program, and the archive make unpacked is the pinned one
-[ -f "$top/patch.exe" ] || { echo "$0: no patch.exe; run make" >&2; exit 1; }
+[ -f "$top/patch.exe" ] || die "no patch.exe; run make"
 # as GR-DOS's dist16 checks a release's program: a DOS MZ executable, and
 # no Open Watcom C runtime in it (its banner)
-[ "$(head -c 2 "$top/patch.exe")" = MZ ] ||
-    { echo "$0: patch.exe is not an MZ executable" >&2; exit 1; }
+[ "$(head -c 2 "$top/patch.exe")" = MZ ] || die "patch.exe is not an MZ executable"
 if grep -aq 'WATCOM C/C++ Run Time' "$top/patch.exe"; then
-    echo "$0: patch.exe has Open Watcom's C runtime banner" >&2; exit 1
+    die "patch.exe has Open Watcom's C runtime banner"
 fi
-[ "$(cat "$libc16/.zip-sha256")" = "$lsha" ]
-[ "$(cat "$libc16/VERSION")" = "$lv" ]
+[ "$(cat "$libc16/.zip-sha256")" = "$lsha" ] || die "build/libc16 is not the pinned release"
+[ "$(cat "$libc16/VERSION")" = "$lv" ] || die "build/libc16 is not libc16 $lv"
+
+# the source is HEAD's, so the tree must be HEAD's
+[ -z "$(git -C "$top" status --porcelain --untracked-files=no)" ] ||
+    die "the checkout has changes; the source archive would not be its source"
+
+# dist16.source names this release's source, and the libc16 release
+# patch.exe is linked with (gr-dos/gr-dos docs/dist16.md)
+manifest() { sed -n "s/^$1 //p" "$top/dist16.source"; }
+[ "$(manifest license)" = GPL-2.0-or-later ] || die "dist16.source: license is not GPL-2.0-or-later"
+[ "$(manifest source)" = "patch16-$version-src.tar.gz" ] ||
+    die "dist16.source: source is not patch16-$version-src.tar.gz"
+[ "$(manifest depends)" = "gr-dos/libc16 v$lv libc16-$lv-src.tar.gz" ] ||
+    die "dist16.source: depends is not gr-dos/libc16 v$lv libc16-$lv-src.tar.gz"
+build=$(manifest build)
+notices=$(manifest notice)
+for f in COPYING "$build" $notices; do
+    [ -f "$top/$f" ] || die "dist16.source names $f, which is not there"
+done
 
 mkdir -p "$dir"
 dir=$(cd "$dir" && pwd)
+
+# patch16's source
+git -C "$top" archive --format=tar --prefix="patch16-$version/" HEAD |
+    gzip -9n > "$dir/patch16-$version-src.tar.gz"
+psha=$(sha256sum "$dir/patch16-$version-src.tar.gz" | cut -d' ' -f1)
+head=$(git -C "$top" rev-parse HEAD)
+listing=$(tar -tzf "$dir/patch16-$version-src.tar.gz")
+for f in dist16.source COPYING "$build" $notices; do
+    printf '%s\n' "$listing" | grep -qx "patch16-$version/$f" ||
+        die "the source archive has no $f"
+done
+
+# libc16's source
 src=$dir/libc16-src.git
 rm -rf "$src"
 git clone -q --bare --depth 1 --branch "v$lv" "$git_url" "$src"
@@ -57,19 +91,22 @@ rm -rf "$src"
 tsha=$(sha256sum "$dir/libc16-$lv-src.tar.gz" | cut -d' ' -f1)
 
 cp "$libc16/LICENSE" "$dir/LICENSE-libc16.txt"
-cp "$top/LICENSES/GPL-2.0.txt" "$dir/GPL-2.0.txt"
+cp "$top/COPYING" "$dir/GPL-2.0.txt"
 
 cat > "$dir/notes.md" <<EOF
 patch16 $version is GNU patch 2.2 for 16-bit MS-DOS: \`patch.exe\`, the DOS
-command \`PATCH\`. It is built with Open Watcom C and linked with libc16 $lv,
-not Open Watcom's C library.
+command \`PATCH\`, for an 8086 or later with DOS 3.0 or later. It is built
+with Open Watcom C and linked with libc16 $lv, not Open Watcom's C library.
+\`docs/DOS.md\` is its manual.
 
 ### Source
 
-- **patch16:** the source for this release is tag \`v$version\` (the
-  Source code archives below): GNU patch 2.2 as adapted (\`src/\`), the DOS
-  code (\`compat/\`), the \`Makefile\` and \`scripts/\`, and the notices.
-  \`docs/PROVENANCE.md\` lists what came from GNU patch and what changed.
+- **patch16:** \`patch16-$version-src.tar.gz\`, attached, is the source of
+  this release: the tree at tag \`v$version\` (commit \`$head\`), with
+  GNU patch 2.2 as adapted (\`src/\`), the DOS code (\`compat/\`), the
+  \`Makefile\`, \`scripts/\`, the tests, and the notices (\`COPYING\`,
+  \`NOTICE\`). \`docs/PROVENANCE.md\` lists what came from GNU patch and
+  what changed. \`dist16.source\` names it for GR-DOS.
 - **libc16 $lv**, linked into \`patch.exe\`: \`libc16-$lv-src.tar.gz\`,
   attached, is its source at tag
   [\`v$lv\`](https://github.com/gr-dos/libc16/tree/v$lv) (commit \`$commit\`).
@@ -78,21 +115,25 @@ not Open Watcom's C library.
 
 ### Building
 
-\`make\` fetches \`libc16-$lv.zip\` (checked against the SHA-256 below) and
-the Open Watcom snapshot it names, then builds \`patch.exe\`; \`make test\`
-runs the tests under DOSBox-X. \`scripts/check-link\` checks from the link
+\`BUILDING.md\`: \`make\` fetches \`libc16-$lv.zip\` (checked against the
+SHA-256 below) and the Open Watcom snapshot it names, then builds
+\`patch.exe\`; \`make test\` runs the tests under DOSBox-X, and \`make
+test-grdos\` on GR-DOS in QEMU. \`scripts/check-link\` checks from the link
 map, on every build, that \`patch.exe\` contains only patch16's objects
-and libc16's.
+and libc16's. Before this release was made, \`scripts/check-source\`
+built \`patch.exe\` again from \`patch16-$version-src.tar.gz\` and found
+it the same, byte for byte.
 
 ### Licenses
 
 - patch16 (GNU patch 2.2 and the changes to it): GPL version 2 or any later
-  version, \`GPL-2.0.txt\`.
+  version, \`GPL-2.0.txt\` (\`COPYING\` in the source).
 - libc16: MIT, \`LICENSE-libc16.txt\`.
 
 ### Checksums (SHA-256)
 
 \`\`\`
+$psha  patch16-$version-src.tar.gz
 $lsha  libc16-$lv.zip
 $tsha  libc16-$lv-src.tar.gz
 $(cd "$top" && sha256sum patch.exe)

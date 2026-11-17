@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# Check that a source archive (scripts/release-files) builds the patch.exe
+# beside it: unpack it in a new directory, run make there, and compare the
+# patch.exe it makes with this checkout's, byte for byte. A release
+# carries the archive as patch.exe's corresponding source, so it must be
+# complete.
+#
+# The Open Watcom snapshot this checkout fetched (build/tools) and the
+# pinned libc16 release archive (build/libc16.zip) are reused, so nothing
+# is downloaded; the unpacked tree checks the archive's SHA-256 itself
+# (scripts/fetch-libc16), as it would after a download.
+#
+# usage: scripts/check-source ARCHIVE
+
+set -eu
+
+[ $# -eq 1 ] || { echo "usage: $0 ARCHIVE" >&2; exit 2; }
+top=$(cd "$(dirname "$0")/.." && pwd)
+archive=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+version=$(cat "$top/VERSION")
+
+[ -f "$top/patch.exe" ] || { echo "$0: no patch.exe; run make" >&2; exit 1; }
+work=$(mktemp -d "${TMPDIR:-/tmp}/p16src.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+
+tar -xzf "$archive" -C "$work"
+tree=$work/patch16-$version
+[ -d "$tree" ] || { echo "$0: the archive has no patch16-$version/" >&2; exit 1; }
+mkdir "$tree/build"
+ln -s "$top/build/tools" "$tree/build/tools"
+cp "$top/build/libc16.zip" "$tree/build/libc16.zip"
+make -C "$tree" -s patch.exe >/dev/null
+if cmp "$tree/patch.exe" "$top/patch.exe"; then
+    echo "check-source: $(basename "$archive") builds patch.exe ($(wc -c < "$top/patch.exe") bytes), the same"
+else
+    echo "$0: patch.exe from $(basename "$archive") differs" >&2
+    exit 1
+fi

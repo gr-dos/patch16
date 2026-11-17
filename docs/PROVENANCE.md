@@ -27,8 +27,8 @@ Where each source module comes from (DESIGN.md §3.4). Licensing is in `docs/LIC
 | `getopt.c`, `getopt1.c`, `getopt.h` | 1137 | FSF | keep (`getopt_long`, for `--dry-run` and the other long options) |
 | `memchr.c` | 199 | FSF | keep (`libc16` has no `memchr`) |
 | `rename.c` | 51 | FSF | **not used**: emulates `rename` with `link`/`unlink`; `libc16`'s `rename` replaces it |
-| `patch.man` | | | basis for `docs/DOS.md` |
-| `COPYING` | | FSF | becomes `LICENSES/GPL-2.0.txt` |
+| `patch.man` | | | kept in `upstream/patch-2.2/`; consulted for `docs/DOS.md`, which is written anew |
+| `COPYING` | | FSF | `COPYING`, unchanged (E5 moved it back from `LICENSES/GPL-2.0.txt`, so that GitHub finds the license) |
 | `README`, `NEWS`, `ChangeLog` | | | kept with the upstream notices; README's license statement is quoted in LICENSE-RESEARCH.md §8 |
 | `configure`, `configure.in`, `config.hin`, `acconfig.h`, `Makefile.in`, `INSTALL`, `install-sh`, `mkinstalldirs` | | FSF / M.I.T. | not used; a fixed DOS `config.h` and a Makefile replace them |
 
@@ -74,7 +74,9 @@ Each change is commented `patch16:` in the source; `git log -p src/` shows it ag
 - `scripts/fetch-upstream`: patch16's own.
 - `scripts/fetch-grdos`: patch16's own, on the pattern of `fetch-libc16`. Fetches the pinned GR-DOS release floppy (`gr-dos-0.04-1440k.img`) that `tests/grdos.sh` boots, and checks its SHA-256.
 - `scripts/check-link`: patch16's own. Run on every link of `patch.exe`; from the linker's map it checks that every module is one of patch16's objects or a member of `LIBC16C.LIB`, and that no other library was used, so no Open Watcom runtime code is in the executable.
-- `scripts/release-files`: patch16's own. Makes what a release carries beside `patch.exe`: the source of the pinned libc16 release (`git archive` of its tag), libc16's MIT notice, the GPL, and the release description with the checksums. patch16's own source is the release tag.
+- `scripts/release-files`: patch16's own. Makes what a release carries beside `patch.exe`: patch16's source (`git archive` of the release commit, which `dist16.source` names for GR-DOS), the source of the pinned libc16 release (`git archive` of its tag), libc16's MIT notice, the GPL, and the release description with the checksums.
+- `scripts/check-source`: patch16's own. Builds `patch.exe` again from the source archive and checks that it is the same, byte for byte.
+- `dist16.source`, `NOTICE`, `BUILDING.md`, `README.md`, `docs/DOS.md`, `docs/GR-DOS.md`: patch16's own (E5). `docs/DOS.md` is written for patch16 from its behaviour and `--help`; GNU patch 2.2's `patch.man` was consulted for the options' meaning, not copied.
 
 ## Historical material
 
