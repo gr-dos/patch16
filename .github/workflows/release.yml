@@ -1,0 +1,72 @@
+name: release
+
+# main only changes by merging a PR, so a push to main is a merge.
+# If VERSION names a version without a tag, tag the merge commit and
+# publish a release with patch16.exe, the source of the libc16 release
+# linked into it, and the license notices attached.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check version
+        id: version
+        run: |
+          version=$(cat VERSION)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "v$version is already released"
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "releasing v$version"
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # make fetches the pinned libc16 release (scripts/fetch-libc16) and
+      # the Open Watcom snapshot it names.
+
+      - name: Install DOSBox-X and mtools
+        if: steps.version.outputs.new == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dosbox-x mtools
+
+      - name: Build and test
+        if: steps.version.outputs.new == 'true'
+        run: |
+          make
+          make test
+
+      # The source of the libc16 release linked in, the notices, and a
+      # description saying where the source is and how to build it.
+      - name: Release files
+        if: steps.version.outputs.new == 'true'
+        run: scripts/release-files build/release
+
+      - name: Create release
+        if: steps.version.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" patch16.exe \
+            build/release/libc16-*-src.tar.gz \
+            build/release/LICENSE-libc16.txt \
+            build/release/GPL-2.0.txt \
+            --target "$GITHUB_SHA" \
+            --title "v$VERSION" \
+            --notes-file build/release/notes.md \
+            --generate-notes

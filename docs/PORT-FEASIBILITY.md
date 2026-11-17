@@ -17,7 +17,7 @@
   1. 16-bit `size_t` overflows in hunk-array growth and in plan B. Hostile input can trigger both (§4).
   2. Plan A is limited to files of about 13 KB in the compact model, so plan B, which uses fixed-width records, carries real workloads.
   3. Binary-mode I/O and CRLF/`^Z` policy.
-  4. `\ No newline at end of file`, which 2.2 does not handle.
+  4. `\ No newline at end of file`, which this report said 2.2 does not handle; it does (§5.2, corrected in E2).
   5. DOS temp files and safe installation.
   6. A narrow local formatter (decision 7).
 - **`libc16` additions:** `rename`, `unlink`/`remove`, `fseek`/`ftell` (decision 8). Everything else is `patch16`-local.
@@ -124,6 +124,20 @@ Replace plan A and plan B with one bounded, file-backed **line-offset index**:
 
 That is 4 bytes of disk per line, constant RAM, no `maxlen` padding, and `ifetch()`'s interface unchanged for `patch.c`. It can be written as a rework of 2.2's `inp.c` (GPL; DESIGN.md §3.4 allows adapting it). Cap hunk sizes as in §4.1. On-disk hunk staging can stay a later improvement.
 
+### 4.5 Measured after the line index (E2)
+
+Done as §4.1 and §4.4 recommend: hunk headers are checked and hunks capped at 15,992 lines, patch lines at 16,383 bytes and input lines at 32,000 bytes; the line index holds 1,024 offsets per block (two cached, the rest in a temporary file) and reads text through two 8 KB windows.
+
+`patch16.exe` 0.01 is 49,098 bytes. Free conventional memory each patch needed under DOSBox-X (8086), found by reserving memory with `LOADFIX` ahead of `patch16` (604 KB free without it):
+
+| Patch | Needs |
+|---|---|
+| 3-line file, one hunk | about 81 KB |
+| 3,000-line, 75 KB file, many hunks; 1,025-line file; a 20,000-byte input line | 83–88 KB |
+| one hunk of 15,992 added lines (the largest allowed) | 305–354 KB |
+
+So memory no longer grows with the size of the file, only with the largest hunk: about 32 KB of the base is the fixed working set (index blocks, windows and the 8 KB patch-line buffer). A program that needs about 90 KB fits beside a typical DOS 3.3 resident set on a 256 KB machine; very large hunks need correspondingly more, and fail with "out of memory" (exit 2) before any file changes. Staging hunks on disk would lift that and remains a later improvement.
+
 ## 5. DOS-specific work
 
 | Need | Where | Notes |
@@ -135,6 +149,15 @@ That is 4 bytes of disk per line, constant RAM, no `maxlen` padding, and `ifetch
 | safe install (`move_file`) | `compat/` | DOS 56h cannot rename over an existing file. The sequence: (1) rename the original to a collision-checked backup or hidden temp name; (2) rename the new file into place; (3) on failure, rename the original back; (4) delete the backup unless `-b`. Leave recovery instructions if the rollback fails (DESIGN.md §7). |
 | backup/reject names | adapt `addext.c` | `.ORG` / `.REJ` **replace** the extension (`FOO.C` → `FOO.ORG`). If the name already ends in `.ORG` or `.REJ`, or the result exists, use 5Bh (create new) to pick `FOO.OR1`… or fail. Never overwrite silently (decision 6). |
 | Ctrl-Break | `compat/` | clean up temp files, exit 2 |
+
+**Status (E2):** done in `compat/install.c` and `compat/dos.c`, with tests in `tests/run.sh`:
+
+- **Safe install:** as above. A failure, or a fatal error, between the renames puts the original back; tested by losing the new file at that point, with and without `-b`.
+- **Disk full:** the patched file is written to a temporary file first, so a full disk fails the write (exit 2) with the original untouched and the temporary files removed; tested on a nearly full 360 KB floppy image.
+- **Temporary files:** made with function 5Ah, which creates the file under a name DOS makes unique, in the current directory (after `-d`). A target named by a relative path is therefore on the same drive, so the install is all renames; one named on another drive is copied in, with the original kept aside until the copy is complete. A copy that fails (a disk full) is removed, whether it was a new file, a replacement or a reject, and an original kept aside is put back; tested on a full floppy as drive A: (steps 52–55).
+- **Ctrl-Break:** an INT 23h handler runs GNU patch's cleanup and exits 2, and is ignored between the install's renames; critical errors (INT 24h) fail the DOS call instead of offering Abort, which would skip the cleanup.
+- **Read-only files** are refused, with their hunks saved as rejects.
+- **Truncated and empty patches:** a hunk cut short is rejected (exit 1): 2.2 takes the missing lines as blank lines lost in transit, and they then fail to match. A header with no hunk, or a context or normal diff cut short, is an error (exit 2). A patch with nothing recognisable, including an empty one, is an error (`only garbage was found in the patch input`, exit 2), as in later GNU releases; 2.2 exited 0. In every case the file is unchanged (steps 91–98).
 
 ### 5.1 Binary mode, CRLF and `^Z`
 
@@ -151,9 +174,11 @@ Then:
 - **output:** write each original line's terminator back unchanged; give added lines the terminator style the target mostly uses (exact rule and tests in E4);
 - **`^Z`:** an ordinary byte. No implicit EOF (DESIGN.md §7).
 
+**Done in E2.** A patch line's CR before LF is dropped as it is read. An input line's CR LF matches a patch line's LF, and `-l` ignores the CR too. Added lines and `-D`'s lines take the line end most of the file's lines have, with a tie going to LF; a file with no line ends takes the patch's majority. Lines copied from the input keep their own, so a mixed file stays mixed. Rejects are LF. Tests: steps 45–51 in `tests/run.sh`.
+
 ### 5.2 `\ No newline at end of file`
 
-2.2 does not handle this marker; its 2.1 README listed it on the wish list. It has to be added in `pch.c`: mark the preceding line as lacking a newline on the relevant side and never add one. Later GNU releases still under GPLv2-or-later (2.5.x) handle it and may be adapted, with a PROVENANCE.md entry.
+**Corrected in E2:** 2.2 does handle this marker. The 2.1 README listed it on the wish list, and this report took that as current, but 2.2's `pch.c` has `incomplete_line`, which reads the marker after the last old or new line of a unified, context or normal diff and drops that line's newline. `tests/run.sh` (steps 60–74) checks round trips made with `diff -u`, `diff -c` and normal `diff` for a last line without a newline on both sides, a newline added, a newline removed, lines appended after it, and a change far from it, and step 80 the same on a CR LF file. No change was needed.
 
 ### 5.3 Git textual patches
 
@@ -162,6 +187,8 @@ Then:
 - recognise the preamble;
 - reject binary patches (`GIT binary patch`, `Binary files … differ`) and mode-only, rename and copy changes with a clear message (DESIGN.md §6);
 - take `a/`/`b/` names with `-p1`.
+
+**Done in E2.** `pch.c` notes each section's `diff --git` line (its `b/` name), and a binary change (`GIT binary patch`, `Binary files … differ`), a rename, a copy or a mode change in it. Such a change is reported as `NAME: patch16 does not apply a rename; not changed`, its hunks are skipped, and the exit status is 1. The exception: a mode change that also has hunks has its text applied, with a note. New and deleted files, `index` and `similarity index` lines need nothing: 2.2 creates a new file and empties a deleted one, as with any diff (`-E` removes it). `tests/run.sh` applies a Git patch made with and without `--binary` that has each kind of change.
 
 ## 6. Formatted output (decision 7)
 

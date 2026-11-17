@@ -1,0 +1,56 @@
+#!/bin/sh
+#
+# Check from wlink's map where every module in an executable came from:
+# each one must be one of the object files named, or a member of the one
+# library named, and that library must be the only one the linker used.
+# This proves from the link itself, not from the options that ask for
+# it (wcc -zl, wlink nodefaultlibs), that no Open Watcom runtime library
+# went into the executable. The modules are listed on standard output.
+#
+# usage: scripts/check-link MAP LIBRARY OBJECT...
+
+set -eu
+
+[ $# -ge 3 ] || { echo "usage: $0 MAP LIBRARY OBJECT..." >&2; exit 2; }
+map=$1 lib=$2
+shift 2
+
+awk -v lib="$lib" -v objs="$*" '
+BEGIN {
+    n = split(objs, o, " ")
+    for (i = 1; i <= n; i++) obj[o[i]] = 1
+}
+{ sub(/\r$/, "") }
+/^Module: / {
+    m = substr($0, 9)
+    p = index(m, "(")
+    file = substr(m, 1, p - 1)
+    member = substr(m, p + 1, length(m) - p - 1)
+    if (file in obj && member == file) {
+        own++
+        print "object   " file
+    } else if (file == lib) {
+        libs++
+        print "library  " member
+    } else {
+        print "check-link: " m " is not from the objects or " lib > "/dev/stderr"
+        bad++
+    }
+    next
+}
+/\|   Libraries Used   \|/ { inlibs = 1; seen = 1; next }
+inlibs && /\|/ { inlibs = 0 }
+inlibs && /^[^ +]/ {
+    used++
+    if ($0 != lib) {
+        print "check-link: the linker used " $0 > "/dev/stderr"
+        bad++
+    }
+}
+END {
+    if (!seen) { print "check-link: no Libraries Used section in the map" > "/dev/stderr"; exit 1 }
+    if (own != n) { print "check-link: " own " of " n " objects in the map" > "/dev/stderr"; bad++ }
+    if (used != 1) { print "check-link: " used " libraries used, not 1" > "/dev/stderr"; bad++ }
+    if (bad) exit 1
+    print "check-link: " own " objects and " libs " modules of " lib "; no other library"
+}' "$map"

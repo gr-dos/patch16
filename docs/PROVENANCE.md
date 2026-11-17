@@ -15,8 +15,8 @@ Where each source module comes from (DESIGN.md §3.4). Licensing is in `docs/LIC
 | File | Lines | Copyright | Plan |
 |---|---:|---|---|
 | `patch.c` | 1127 | Wall 1984–88; FSF 1989–97 | adapt: main loop, options, fuzz default `-F0`, safe install |
-| `pch.c` | 1533 | Wall 1986–88; FSF 1990–97 | adapt: bounded hunk sizes; add `\ No newline at end of file` handling; Git preamble |
-| `inp.c` | 501 | Wall 1986, 1988; FSF 1991–97 | adapt or replace plan A/B with a bounded, file-backed line index (PORT-FEASIBILITY.md §4) |
+| `pch.c` | 1533 | Wall 1986–88; FSF 1990–97 | adapt: bounded hunk sizes; Git sections with binary, rename, copy or mode changes are reported and skipped (`git_section`, `git_report`, `find_text`; written for patch16) (`\ No newline at end of file` is handled by 2.2 already) |
+| `inp.c` | 501 | Wall 1986, 1988; FSF 1991–97 | adapt: plans A and B replaced by a bounded, file-backed line index (PORT-FEASIBILITY.md §4) |
 | `util.c` | 681 | Wall 1986; FSF 1992–97 | adapt: `move_file`, `ask`, signals, `makedirs` and temp files move behind `compat/` |
 | `version.c` | 30 | Wall 1984–88; FSF 1989–97 | adapt: `patch16` version text |
 | `common.h`, `inp.h`, `pch.h`, `util.h`, `version.h` | | Wall / FSF | adapt |
@@ -32,6 +32,43 @@ Where each source module comes from (DESIGN.md §3.4). Licensing is in `docs/LIC
 | `README`, `NEWS`, `ChangeLog` | | | kept with the upstream notices; README's license statement is quoted in LICENSE-RESEARCH.md §8 |
 | `configure`, `configure.in`, `config.hin`, `acconfig.h`, `Makefile.in`, `INSTALL`, `install-sh`, `mkinstalldirs` | | FSF / M.I.T. | not used; a fixed DOS `config.h` and a Makefile replace them |
 
+## New modules (`compat/`)
+
+All by patch16 contributors, GPLv2-or-later, written for this port; no code taken from elsewhere. References are the `libc16` specs (`docs/spec/`) and the MS-DOS INT 21h function descriptions.
+
+| File | What | Tests |
+|---|---|---|
+| `compat/include/config.h` | the fixed DOS configuration that replaces `configure` | build |
+| `compat/include/p16.h`, `unistd.h`, `signal.h`, `assert.h` | POSIX names GNU `patch` uses, mapped onto `libc16` and the adapters below | build |
+| `compat/fmt.c` | message formatter: `%s %c %d %ld %o %%` with a width, nothing else (decision 7) | `tests/run.sh` (messages) |
+| `compat/dos.c` | `isatty`, `fstat` (IOCTL 4400h), `chdir` (3Bh, selecting the drive; the drive and directory are restored by `p16_exit`), `creat` (binary), `tmpnam` (5Ah), checked `atol`; `signal` for SIGINT through an INT 23h handler (Ctrl-Break), and an INT 24h handler that fails critical errors (`p16_init`) | `tests/run.sh` steps 19–20, 37–40 |
+| `compat/testpt.c`, `tests/breakpt.c` | the empty test hook in `patch16.exe`, and the one in the test build that raises Ctrl-Break where `P16BREAK` says | `tests/run.sh` steps 37–40 |
+| `compat/install.c` | safe install: the original moves aside before the new file goes in and is put back on failure; backups and rejects take the next free name, never replacing a file (decision 6); a copy to another drive that fails is taken back, leaving no partial file; a read-only file is refused | `tests/run.sh` steps 1–9, 14, 52–55 |
+
+## Changes to upstream files
+
+Each change is commented `patch16:` in the source; `git log -p src/` shows it against the unmodified import.
+
+| File | Change |
+|---|---|
+| `util.c` | `move_file` builds the backup name as before and calls `p16_move_file`; GNU's same-file search, which never ends on DOS (`st_ino` is always 0), is removed. `copy_file` opens binary. |
+| `patch.c` | generated reject names go through `p16_move_new` (`FOO.REJ`, `FOO.RE1`, …), and the message names the file used; `cleanup` restores an original that was moved aside; a read-only file is refused and its hunks go to the reject file; output and reject files open binary; the program name is `patch16`; fuzz defaults to 0; `-D` puts deleted lines under `#ifndef` (2.2 wrote `#ifdef`; later GNU releases made the same correction, written here independently); `-e` is gone and an ed script is a fatal error; `main` ends through `exit` |
+| `addext.c` | an extension beginning with `.` replaces the name's own (`FOO.C` → `FOO.ORG`) |
+| `backupfile.c` | the default suffix is `.ORG` |
+| `basename.c` | `\` and `:` also end a directory or drive prefix |
+| `inp.c`, `pch.c` | every file opens binary, and a patch on standard input is read binary; RCS/SCCS checkout (`inp.c`) and `do_ed_script` (`pch.c`) are removed; `pch.c` checks hunk header numbers (`check_range`) and caps hunks at 15,992 lines and patch lines at 16,383 bytes, where 16-bit sizes would wrap |
+| `inp.c` | plans A and B (`plan_a`, `plan_b` and `ifetch`'s two halves) are replaced by patch16's `index_input`, `line_start` and a new `ifetch`: line-start offsets in 1024-entry blocks (beyond the first, in `TMPINNAME`, two cached), text read through two 8 KB windows; input lines up to 32,000 bytes; plan B's `Prereq:` search is kept. `re_input` closes the input before the output replaces it. `get_input_file` tells `compat/install.c` (`p16_created`) about the empty file it makes for a file the patch creates, so that the file is removed if patch16 stops before the new one is in. |
+| `pch.c` (empty input) | `there_is_another_patch` is fatal when nothing in the patch input is a patch (`only garbage was found in the patch input`, the message later GNU releases use), unless a Git change was reported; 2.2 exited 0 |
+| `patch.c`, `pch.c`, `inp.c` (line ends) | `pget_line` drops one CR before a patch line's LF; `patch_match` takes an input line's CR LF as the patch line's LF (`same_line`), and `similar` (`-l`) ignores it; added lines and `-D`'s lines are written with the line ends most of the file has (`input_eol`), or the patch's for a file with none (`pch_eol_crlf`), through `out_line`, `put_eol` and `put_define`; lines copied from the input are unchanged; rejects have LF |
+| `version.c` | adds the patch16 copyright line |
+
+## Build scripts
+
+- `scripts/fetch-libc16`: a copy of libc16's `consumers/fetch-libc16` (MIT, gr-dos/libc16), with only `version` and `sha256` set to libc16 0.05's published release (`libc16-0.05.zip.sha256`). libc16 is linked into `patch16.exe` and remains MIT; no patch16 or GNU code goes into it.
+- `scripts/fetch-upstream`: patch16's own.
+- `scripts/check-link`: patch16's own. Run on every link of `patch16.exe`; from the linker's map it checks that every module is one of patch16's objects or a member of `LIBC16C.LIB`, and that no other library was used, so no Open Watcom runtime code is in the executable.
+- `scripts/release-files`: patch16's own. Makes what a release carries beside `patch16.exe`: the source of the pinned libc16 release (`git archive` of its tag), libc16's MIT notice, the GPL, and the release description with the checksums. patch16's own source is the release tag.
+
 ## Historical material
 
 Larry Wall's patch 2.0 pl12 as shipped in X11R3 (`upstream/x11r3-patch-2.0pl12.sha256`) is documented in LICENSE-RESEARCH.md §1–§7 as history only. No code is taken from it.
@@ -39,4 +76,4 @@ Larry Wall's patch 2.0 pl12 as shipped in X11R3 (`upstream/x11r3-patch-2.0pl12.s
 ## Reference-only material consulted
 
 - GNU `patch` git, tags `v2.1` through `v2.6`: README, NEWS, COPYING, ChangeLog and file notices, for the license chain.
-- `libc16` (`../libc16`, release 0.04): headers and `docs/` specs, for the API gap list.
+- `libc16` 0.05 (pinned by `scripts/fetch-libc16`): headers and `docs/` specs, for the API gap list and the adapters.
