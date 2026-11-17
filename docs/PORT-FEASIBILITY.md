@@ -188,7 +188,7 @@ Then:
 - reject binary patches (`GIT binary patch`, `Binary files … differ`) and mode-only, rename and copy changes with a clear message (DESIGN.md §6);
 - take `a/`/`b/` names with `-p1`.
 
-**Done in E2.** `pch.c` notes each section's `diff --git` line (its `b/` name), and a binary change (`GIT binary patch`, `Binary files … differ`), a rename, a copy or a mode change in it. Such a change is reported as `NAME: patch16 does not apply a rename; not changed`, its hunks are skipped, and the exit status is 1. The exception: a mode change that also has hunks has its text applied, with a note. New and deleted files, `index` and `similarity index` lines need nothing: 2.2 creates a new file and empties a deleted one, as with any diff (`-E` removes it). `tests/run.sh` applies a Git patch made with and without `--binary` that has each kind of change.
+**Done in E2.** `pch.c` notes each section's `diff --git` line (its `b/` name), and a binary change (`GIT binary patch`, `Binary files … differ`), a rename, a copy or a mode change in it. Such a change is reported as `NAME: patch16 does not apply a rename; not changed`, its hunks are skipped, and the exit status is 1. The exception: a mode change that also has hunks has its text applied, with a note. New and deleted files, `index` and `similarity index` lines need nothing: 2.2 creates a new file and empties a deleted one, as with any diff (`-E` removes it). (E3 changed this: a deleted file is removed, §9.) `tests/run.sh` applies a Git patch made with and without `--binary` that has each kind of change.
 
 ## 6. Formatted output (decision 7)
 
@@ -217,6 +217,41 @@ The message functions `say`, `fatal`, `pfatal` and `ask` already go through one 
    - get a first linked `PATCH16.EXE`.
 3. Fixes in order: binary I/O (§5.1), hunk caps (§4.1), line index replacing plan A/B (§4.4), safe install and names (§5), fuzz default, formatter (§6).
 4. Tests: host-side `diff -u` round trips and malformed input at 16-bit boundaries, run under DOSBox-X (DESIGN.md §9).
+
+## 9. Unified format and Git text (E3)
+
+Decision 1 lets 2.2's unified-diff parser be reused, so E3 did not write a new one. It tested 2.2's parser against what Linux tools make, and fixed what failed.
+
+**The round-trip corpus** (`tests/corpus.sh`) has 20 cases, each an old and a new tree made on Linux:
+
+- a one-line file, which gives hunk headers without counts (`@@ -1 +1 @@`);
+- a new file, an emptied file, a deleted file, and an empty file that gets its first lines;
+- lines inserted, appended, deleted at either end, and changed in the middle;
+- a 3,000-line file changed in many hunks;
+- a last line without a newline, kept, added, removed and appended to;
+- the same lines repeated, where only the hunk's line number decides;
+- several files in directories, one of them new in a new directory;
+- C functions, for the section labels of `diff -p` and Git;
+- a patch applied at an offset;
+- lines that look like diff syntax (`--- a/x`, `@@ … @@`, `\ No newline …`, `diff --git`, `Index:`);
+- code page 437 bytes, tabs, trailing blanks and a form feed;
+- a 2,000-byte line;
+- empty lines in the context.
+
+Each case is made into a `-p1` patch by eight producers: `diff -Nru`, `-NrU0`, `-NrU10`, `-Nrup` and `-Nrc`; `git diff`; `git format-patch`, a mail with headers, a diffstat and a signature; and `diff -Nru` with the blank stripped from empty context lines, as some mailers and editors leave a patch. Each patch is applied with LF files and an LF patch. The `diff -u`, `git diff` and `git format-patch` patches are also applied to the tree converted to CR LF, with the patch as made and with the patch converted to CR LF too. That makes 280 runs. Each result must be the new tree byte for byte, after the line-end rule of §5.1: a file keeps its line ends, and a new file takes the patch's. GNU patch 2.8 on the host gives the same results for the LF runs; this checks the corpus itself.
+
+`make test` runs the corpus under DOSBox-X, on an 8086. `make test-grdos` runs it on GR-DOS 0.04 in QEMU (`tests/grdos.sh`). That boots the release's 1.44 MB floppy, pinned by `scripts/fetch-grdos`, with an `AUTOEXEC.BAT` that runs the corpus from a second floppy, one floppy for each producer. CI runs both. This is the gate of DESIGN.md §10: "Linux-to-GR-DOS round-trip corpus passes".
+
+**Fixed in E3:**
+
+- **Deleted files.** A patch says a file is gone after it with Git's `deleted file mode`, a new-file header naming `/dev/null`, or a header dated at the epoch, which is how `diff -N` dates a file that does not exist. 2.2 left such a file empty unless `-E` was given. patch16 now removes it, as later GNU patch does, but only if every hunk applied and the result is empty. With `-b` the original is kept as the backup. Tests: `tests/run.sh` steps 56 and 57, and the Git steps.
+- **A hunk at line 0.** `diff -U0` gives lines added at the top of a file a hunk at line 0 of an empty range (`@@ -0,0 +1,2 @@`). 2.2 took every such hunk as creating the file, and failed it on a file that exists. Now a hunk is taken as creating the file only when the old file's header names `/dev/null` or is dated at the epoch, or Git says `new file mode`. Otherwise the lines go in before the first line. Test: step 58, and the corpus.
+
+**Already handled by 2.2,** and now tested by the corpus: omitted counts, zero-length ranges, section labels after `@@`, several hunks and several files in one patch, new directories, `\ No newline at end of file`, mail headers and a signature around a `git format-patch` patch, `index` and `similarity` lines, and context lines that have lost their blank.
+
+**Open files.** patch16 keeps the patch, the input, the output and the reject file open at once, and also the line index for a file of more than 1,024 lines. DOS's default of `FILES=8` covers every open file in the system, and the console, `AUX`, `PRN` and a redirected output take four of them. With that default, patch16 can fail with `Too many open files` before it changes anything (exit status 2). GR-DOS's own installs set `FILES=20`, and `tests/grdos.sh` boots with the same setting. Opening the reject file only when a hunk fails would cut the need by one; that is left for E4.
+
+**Not supported:** Git's quoted names (`"a/name with spaces"`), which cannot be DOS names. The Git changes of §5.3 that patch16 cannot make are reported, as they were in E2.
 
 ## Appendix A: Wall's 1988 code (historical, superseded)
 
