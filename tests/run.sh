@@ -266,7 +266,7 @@ printf 'first\n#ifndef X\nsecond\n#else\nSECOND\n#endif /* X */\nthird\n' > want
 # the directory, start at the root, name a drive or a device, or are not
 # 8.3 are not patched (status 1); the next file in the patch still is
 mkdir safe safe/sub2
-for f in ../esc.c /abs.c 'c:\drv.c' nul.c longname.txt ok.c; do
+for f in ../esc.c /abs.c 'c:\drv.c' nul.c longnames.txt ok.c; do
     printf -- '--- /dev/null\n+++ %s\n@@ -0,0 +1 @@\n+x\n' "$f"
 done > safe/h.pat
 # DOS's \ in a patch's names, as / is
@@ -792,7 +792,7 @@ Hunk #1 ignored at 1.
 nul.c: patch16 does not patch a DOS device; not changed
 Hunk #1 ignored at 1.
 1 out of 1 hunk ignored
-longname.txt: patch16 does not patch a file whose name is not a DOS 8.3 name; not changed
+longnames.txt: patch16 does not patch a file whose name is not a DOS 8.3 name; not changed
 Hunk #1 ignored at 1.
 1 out of 1 hunk ignored
 patching file ok.c

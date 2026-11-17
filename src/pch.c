@@ -739,7 +739,10 @@ LINENUM file_line;
     register int c;
 
     assert(p_base <= file_pos);
-    if ((verbosity == VERBOSE || !inname) && p_base < file_pos) {
+    /* patch16: not for a file whose names were refused; it is reported
+       as not changed instead.  */
+    if ((verbosity == VERBOSE || (!inname && !unsafe_name))
+	&& p_base < file_pos) {
 	Fseek (i, p_base, SEEK_SET);
 	say ("The text leading up to this was:\n--------------------------\n");
 
