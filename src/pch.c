@@ -83,6 +83,20 @@ static char *git_name;			/* the file of the section */
 static char const *git_unsupported;	/* what it does, or 0 */
 static bool git_mode;			/* the section changes the mode */
 static int p_not_applied;		/* such changes reported */
+
+/* patch16: whether the patch says the file is gone after it: Git's
+   "deleted file mode", or a new-file header naming /dev/null or dated
+   at the epoch, as diff -N makes for a file it treats as empty
+   (DESIGN.md section 6).  patch.c removes such a file if it is empty
+   after patching, as -E would.  Headers are noted as the scan meets
+   them; which one is the new file's is known when the scan ends.  */
+static bool hdr_absent_star;		/* the "*** " header */
+static bool hdr_absent_dash;		/* the "--- " header */
+static bool hdr_absent_plus;		/* the "+++ " header */
+static bool git_deleted;		/* "deleted file mode" */
+static bool git_created;		/* "new file mode" */
+static bool p_deletes;			/* the result: the file is gone */
+static bool header_absent PARAMS ((char const *));
 static void git_report PARAMS ((void));
 static void git_section PARAMS ((char const *));
 static char const *find_text PARAMS ((char const *, char const *));
@@ -323,6 +337,7 @@ git_section (s)
 
     if (strnEQ (s, "diff --git ", 11)) {
 	git_report ();
+	git_deleted = git_created = FALSE;
 	/* The new name, the last word, as -p0 would see it.  */
 	t = s + strlen (s);
 	while (s < t && ISSPACE ((unsigned char) t[-1]))
@@ -354,6 +369,10 @@ git_section (s)
 	git_unsupported = "a copy";
     else if (strnEQ (s, "old mode ", 9) || strnEQ (s, "new mode ", 9))
 	git_mode = TRUE;
+    else if (strnEQ (s, "deleted file mode ", 18))
+	git_deleted = TRUE;
+    else if (strnEQ (s, "new file mode ", 14))
+	git_created = TRUE;
 }
 
 /* patch16: how many changes patch16 could not make were reported.  */
@@ -362,6 +381,36 @@ int
 pch_not_applied ()
 {
     return p_not_applied;
+}
+
+/* patch16: whether a file header, from S just after "--- " or the like,
+   says there is no file: it names /dev/null, or the date after the name
+   is the epoch (1970-01-01, or 1969-12-31 west of Greenwich, in diff's
+   ISO form or in ctime's), as diff -N dates a file that does not exist.
+   The name ends at the first blank, as fetchname has it.  */
+
+static bool
+header_absent (s)
+     char const *s;
+{
+    while (ISSPACE ((unsigned char) *s))
+	s++;
+    if (strnEQ (s, "/dev/null", 9)
+	&& (!s[9] || ISSPACE ((unsigned char) s[9])))
+	return TRUE;
+    while (*s && !ISSPACE ((unsigned char) *s))
+	s++;
+    return (find_text (s, "1970-01-01 ") || find_text (s, "1969-12-31 ")
+	    || ((find_text (s, " Jan  1 ") || find_text (s, " Dec 31 "))
+		&& (find_text (s, " 1970") || find_text (s, " 1969"))));
+}
+
+/* patch16: whether the patch of the file now being patched deletes it.  */
+
+bool
+pch_deletes_file ()
+{
+    return p_deletes;
 }
 
 /* Determine what kind of diff is in the remaining part of the patch file. */
@@ -389,6 +438,8 @@ intuit_diff_type()
 
     name[OLD] = name[NEW] = name[INDEX] = 0;
     ok_to_create_file = FALSE;
+    hdr_absent_star = hdr_absent_dash = hdr_absent_plus = FALSE; /* patch16 */
+    git_deleted = git_created = p_deletes = FALSE;
     git_report ();			/* patch16: nothing is noted yet */
     Fseek (pfp, p_base, SEEK_SET);
     p_input_line = p_bline - 1;
@@ -430,12 +481,18 @@ intuit_diff_type()
 	    fcl_line = p_input_line;
 	    p_indent = indent;		/* assume this for now */
 	}
-	if (!stars_last_line && strnEQ(s, "*** ", 4))
+	if (!stars_last_line && strnEQ(s, "*** ", 4)) {
+	    hdr_absent_star = header_absent (s+4);	/* patch16 */
 	    name[OLD] = fetchname (s+4, strippath);
-	else if (strnEQ(s, "--- ", 4))
+	}
+	else if (strnEQ(s, "--- ", 4)) {
+	    hdr_absent_dash = header_absent (s+4);	/* patch16 */
 	    name[NEW] = fetchname (s+4, strippath);
-	else if (strnEQ(s, "+++ ", 4))
+	}
+	else if (strnEQ(s, "+++ ", 4)) {
+	    hdr_absent_plus = header_absent (s+4);	/* patch16 */
 	    name[OLD] = fetchname (s+4, strippath); /* Swap with NEW below.  */
+	}
 	else if (strnEQ(s, "Index:", 6))
 	    name[INDEX] = fetchname (s+6, strippath);
 	else if (strnEQ(s, "Prereq:", 7)) {
@@ -526,6 +583,15 @@ intuit_diff_type()
     }
 
   scan_exit:
+
+    /* patch16: the new file's header is "+++ " in a unified diff and
+       "--- " in a context diff; -R swaps old and new.  */
+    if (retval == UNI_DIFF)
+      p_deletes = reverse ? hdr_absent_dash || git_created
+			  : hdr_absent_plus || git_deleted;
+    else if (retval == CONTEXT_DIFF || retval == NEW_CONTEXT_DIFF)
+      p_deletes = reverse ? hdr_absent_star || git_created
+			  : hdr_absent_dash || git_deleted;
 
     /* Use algorithm specified by POSIX 1003.2b/D11 to deduce `inname',
        the name of the file to patch; except that if the patch syntactically
