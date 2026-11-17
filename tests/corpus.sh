@@ -268,7 +268,9 @@ make_corpus() {
     rm -rf "$dir"; mkdir -p "$dir/dos" "$dir/want" "$dir/ws"
     for p in $PRODUCERS; do
         mkdir -p "$dir/dos/$p/T"
-        cat > "$dir/dos/$p/RC.BAT" <<'EOF'
+        # CR LF: MS-DOS 4.00's COMMAND.COM reads a batch file's lines
+        # up to CR; with LF alone the file is one line
+        dos > "$dir/dos/$p/RC.BAT" <<'EOF'
 @echo off
 if errorlevel 2 goto rc2
 if errorlevel 1 goto rc1
