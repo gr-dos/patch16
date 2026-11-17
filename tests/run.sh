@@ -505,7 +505,7 @@ printf 'a\r\nc' > want/crnl.txt
 echo "patch16 -p1 -i crnl.pat >o80.txt" >> steps.bat
 echo "call rc 80" >> steps.bat
 
-SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 300 \
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout -k 10 300 \
     "$DOSBOX" -defaultconf -silent -nogui -nomenu \
     -set "dosbox machine=cga" -set "cpu cputype=8086" \
     -set "cpu core=normal" -set "cpu cycles=max" \
