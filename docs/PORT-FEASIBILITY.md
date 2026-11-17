@@ -249,9 +249,80 @@ Each case is made into a `-p1` patch by eight producers: `diff -Nru`, `-NrU0`, `
 
 **Already handled by 2.2,** and now tested by the corpus: omitted counts, zero-length ranges, section labels after `@@`, several hunks and several files in one patch, new directories, `\ No newline at end of file`, mail headers and a signature around a `git format-patch` patch, `index` and `similarity` lines, and context lines that have lost their blank.
 
-**Open files.** patch16 keeps the patch, the input, the output and the reject file open at once, and also the line index for a file of more than 1,024 lines. DOS's default of `FILES=8` covers every open file in the system, and the console, `AUX`, `PRN` and a redirected output take four of them. With that default, patch16 can fail with `Too many open files` before it changes anything (exit status 2). GR-DOS's own installs set `FILES=20`, and `tests/grdos.sh` boots with the same setting. Opening the reject file only when a hunk fails would cut the need by one; that is left for E4.
+**Open files.** patch16 keeps the patch, the input, the output and the reject file open at once, and also the line index for a file of more than 1,024 lines. DOS's default of `FILES=8` covers every open file in the system, and the console, `AUX`, `PRN` and a redirected output take four of them. With that default, patch16 can fail with `Too many open files` before it changes anything (exit status 2). GR-DOS's own installs set `FILES=20`, and `tests/grdos.sh` boots with the same setting. E4 opens the reject file only when a hunk fails, which cuts the need by one for a patch that applies (§10.4).
 
 **Not supported:** Git's quoted names (`"a/name with spaces"`), which cannot be DOS names. The Git changes of §5.3 that patch16 cannot make are reported, as they were in E2.
+
+## 10. Robustness (E4)
+
+The gate of DESIGN.md §10: failure modes do not silently corrupt source files. E4 checks the file names a patch gives, states the text policy, collects the limits, and changes how rejects and failed hunks are handled. Tests: `tests/run.sh` steps 81–86, and the reject and backup steps changed below.
+
+### 10.1 File names from a patch
+
+A patch can name any file, so patch16 checks every name it takes from a patch's headers before it uses it (`compat/path.c`). This is after `-p` has stripped its parts, and after a `\` has been made a `/`, as DOS takes both. patch16 patches a file only if its name:
+
+- is relative: not `/X.C`, which starts at the root;
+- names no drive: not `C:X.C` or `C:\X.C`;
+- stays in the current directory, or in `-d`'s: no `..` part at all, even one that would come back;
+- has parts that are all DOS 8.3 names, made of the bytes DOS takes in a name (code page bytes are taken). patch16 never shortens a long name, which could make two names one: `config.h.in`, `.profile` and `verylongname.c` are refused;
+- names no DOS device in any part, with or without an extension: `CON`, `PRN`, `AUX`, `NUL`, `CLOCK$`, `COM1`–`COM9`, `LPT1`–`LPT9`. Devices that drivers add in `CONFIG.SYS` are not known to patch16.
+
+A refused name is dropped from the names the file could be (the old, new and `Index:` names). If another is left, that one is patched, with a note: `Ignoring the file name ../X.C: patch16 does not patch a file outside the current directory`. If none is left, the file is reported, as a Git change patch16 cannot make is, and its hunks are skipped: `../X.C: patch16 does not patch a file outside the current directory; not changed`. Exit status 1; the rest of the patch is still applied.
+
+Names given on the command line, with `-o`, `-r` or `-d`, or at the `File to patch:` prompt are the user's own and are not checked. DOS ignores case, so two names that differ only in case are the same file, patched in turn.
+
+### 10.2 Text
+
+| What | Policy |
+|---|---|
+| Line ends of the patch | LF or CR LF, in any mix; one CR before a LF is dropped as each line is read (§5.1) |
+| Matching | a file's CR LF line matches the patch's line; `-l` ignores the CR too |
+| Line ends written | lines copied from the file keep theirs, so a mixed file stays mixed; added lines and `-D`'s lines take the end most of the file's lines have, LF on a tie; a file with no line ends, or a new one, takes the patch's majority |
+| Last line without a newline | kept as it is; `\ No newline at end of file` is honoured on both sides, and no newline is ever added or dropped otherwise (§5.2) |
+| `^Z` (1Ah) | an ordinary byte, in the patch and in the file; it never ends either (step 5) |
+| NUL in the file patched | an ordinary byte, copied as it is; a line with one matches only a patch line with the same bytes (step 86) |
+| NUL in a hunk line of the patch | refused: a fatal error, exit status 2, the file not changed (steps 84–85). 2.2 keeps context-diff lines as C strings, which would cut such a line at the NUL and lose the rest of it with its newline. `diff` and Git make no such lines from text; `diff -a` does from a binary file. A NUL outside a hunk, in a mail around the patch, is ignored as other text there is |
+| Other bytes | opaque; code page 437 and UTF-8 are only bytes |
+| Rejects | written with LF line ends |
+
+### 10.3 Limits
+
+Memory no longer grows with the size of the file, only with the largest hunk (§4.5). Every limit fails before the file is changed: a fatal error, exit status 2, and the temporary files removed.
+
+| Limit | Value |
+|---|---|
+| Lines in one hunk (both sides) | 15,992 |
+| Bytes in one patch line | 16,383 with its newline |
+| Bytes in one line of a file patched | 32,000 |
+| Line numbers in a hunk header | at most 1,000,000,000; a larger number or a negative count is malformed (exit status 2) |
+| Lines in a file, bytes in a file | no limit of patch16's: 4 bytes of temporary file per line |
+| Conventional memory | about 81–88 KB for most patches; about 354 KB for a hunk of 15,992 lines |
+| Open files | 4 with the patch, the file, the output and, for a file of more than 1,024 lines, its line index; 1 more while there are rejects (§9) |
+
+### 10.4 Rejected hunks
+
+- **Format:** 2.2 writes each rejected hunk as a context diff, whatever the patch's format, numbered where the hunk was tried. It is applied with `PATCH FOO.C FOO.REJ` once fixed.
+- **Names:** `FOO.REJ`, or the next free name (`FOO.RE1`, …) if that is taken; a file is never replaced, except the one named with `-r`, which the user asked for (§5).
+- **Opened only when a hunk fails** (`open_reject`), so a patch that applies needs one file handle fewer.
+- **Saved before the file is replaced.** 2.2 replaced the file, then saved the rejects. If they could not be saved, on a full disk for example, the file was left with some of its hunks applied and the rest lost. Now a reject that cannot be saved stops patch16 (exit status 2) with the file not changed. The reverse case still fails safely: the rejects are saved, the file cannot be replaced, and the original stays (step 54 covers the first, on a disk too full for the reject).
+- **The original is kept when a hunk fails,** as `FOO.ORG` (or the next free name), without `-b`. 2.2 replaced the file with the hunks that applied and kept no copy unless `-b` was given. Later GNU releases keep it by default too (`--backup-if-mismatch`); patch16 keeps it on a failed hunk only, not on an offset or fuzz, so a patch that applies leaves no backup behind (steps 8, 9, 15, 56).
+- A file not patched (read-only, a refused name, a Git change patch16 cannot make) has its hunks counted as ignored. A read-only file's are saved as rejects; a refused name has no file to name them after, so they are reported only.
+- `--dry-run` saves no rejects and replaces nothing.
+
+### 10.5 What a failure leaves
+
+| Failure | Exit status | The file | Other files |
+|---|---:|---|---|
+| A hunk fails | 1 | the hunks that applied are applied | `FOO.REJ` with the rest; `FOO.ORG`, the original |
+| A file name refused, or a Git change not made | 1 | not changed | none |
+| A read-only file | 1 | not changed | `FOO.REJ` |
+| A malformed, truncated or garbled patch; a NUL in a hunk; a limit exceeded | 2 | not changed | none; files earlier in the patch stay patched |
+| Out of memory, too many open files | 2 | not changed | none; as above |
+| A disk full, writing the output, a copy or the reject | 2 | not changed | none left, not even a partial copy (§5) |
+| Ctrl-Break, or a critical error (INT 24h) | 2 | not changed; ignored while the file is being replaced | none |
+| Losing the new file while it replaces the original | 2 | the original is put back | none |
+
+A patch of several files is applied one file at a time. A failure stops at the file it is in; the files before it stay patched, as their messages said. Exit status 2 says the run did not complete.
 
 ## Appendix A: Wall's 1988 code (historical, superseded)
 
