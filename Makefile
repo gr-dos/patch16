@@ -1,7 +1,8 @@
-# Build patch16.exe, GNU patch 2.2 for 16-bit MS-DOS, with Open Watcom and
-# libc16, in the compact memory model (docs/DESIGN.md, section 14).
+# Build patch.exe, the DOS command PATCH: GNU patch 2.2 for 16-bit MS-DOS,
+# built with Open Watcom and libc16 in the compact memory model
+# (docs/DESIGN.md, section 14). The project is patch16; the program is PATCH.
 #   make                         fetch the pinned libc16 release into
-#                                build/libc16, then build patch16.exe
+#                                build/libc16, then build patch.exe
 #   make test                    run the tests (tests/run.sh) and the round-trip
 #                                corpus (tests/corpus.sh) under DOSBox-X
 #   make test-grdos              run the round-trip corpus on GR-DOS, in QEMU
@@ -24,7 +25,7 @@ CFLAGS = -q -zq -zl -zld -x -mc -0 -os -s -bt=dos -w1 \
          -I$(LIBC16_DIR)/include
 
 # GNU patch 2.2's sources (src/, docs/PROVENANCE.md) and patch16's own
-# (compat/). The test build, build/patch16t.exe, replaces the empty test
+# (compat/). The test build, build/patcht.exe, replaces the empty test
 # hook (compat/testpt.c) with one that raises Ctrl-Break (tests/breakpt.c).
 SRCS = src/patch.c src/pch.c src/inp.c src/util.c src/version.c \
        src/addext.c src/argmatch.c src/backupfile.c src/basename.c \
@@ -35,14 +36,14 @@ TOBJS := $(OBJS) build/obj/tests/breakpt.obj
 OBJS += build/obj/compat/testpt.obj
 HDRS = $(wildcard src/*.h compat/include/*.h) build/include/patchlevel.h
 
-patch16.exe: $(OBJS) $(LIBC16) $(TOOLS_ENV)
-	$(WATCOM_ENV) && wlink option quiet, nodefaultlibs, map=patch16.map \
+patch.exe: $(OBJS) $(LIBC16) $(TOOLS_ENV)
+	$(WATCOM_ENV) && wlink option quiet, nodefaultlibs, map=patch.map \
 	  format dos name $@ $(foreach o,$(OBJS),file $(o)) library $(LIBC16)
-	scripts/check-link patch16.map $(LIBC16) $(OBJS) > build/link.txt \
+	scripts/check-link patch.map $(LIBC16) $(OBJS) > build/link.txt \
 	  || { rm -f $@; exit 1; }
 	tail -1 build/link.txt
 
-build/patch16t.exe: $(TOBJS) $(LIBC16) $(TOOLS_ENV)
+build/patcht.exe: $(TOBJS) $(LIBC16) $(TOOLS_ENV)
 	$(WATCOM_ENV) && wlink option quiet, nodefaultlibs \
 	  format dos name $@ $(foreach o,$(TOBJS),file $(o)) library $(LIBC16)
 
@@ -51,9 +52,9 @@ build/obj/%.obj: %.c $(HDRS) $(LIBC16) $(TOOLS_ENV)
 	$(WATCOM_ENV) && $(CC) $(CFLAGS) -fo=$@ $<
 
 # As GNU patch's Makefile.in makes it, from patch16's version.
-build/include/patchlevel.h: VERSION
+build/include/patchlevel.h: VERSION Makefile
 	mkdir -p $(@D)
-	echo '#define PATCH_VERSION "$(VERSION) (GNU patch 2.2)"' > $@
+	echo '#define PATCH_VERSION "(patch16) $(VERSION) (GNU patch 2.2)"' > $@
 
 # The pinned libc16 release (scripts/fetch-libc16). A LIBC16_ROOT given
 # on the command line must already be built.
@@ -68,14 +69,14 @@ $(TOOLS_ENV): $(LIBC16)
 	watcom=$$(sh $(LIBC16_DIR)/tools/fetch-watcom $(CURDIR)/build/tools) \
 	  && printf 'WATCOM=%s\nexport WATCOM\n' "$$watcom" > $@
 
-test: patch16.exe build/patch16t.exe
-	sh tests/run.sh $(CURDIR)/patch16.exe $(CURDIR)/build/patch16t.exe
-	sh tests/corpus.sh dosbox $(CURDIR)/patch16.exe
+test: patch.exe build/patcht.exe
+	sh tests/run.sh $(CURDIR)/patch.exe $(CURDIR)/build/patcht.exe
+	sh tests/corpus.sh dosbox $(CURDIR)/patch.exe
 
-test-grdos: patch16.exe
-	sh tests/corpus.sh grdos $(CURDIR)/patch16.exe
+test-grdos: patch.exe
+	sh tests/corpus.sh grdos $(CURDIR)/patch.exe
 
 clean:
-	rm -rf build/obj build/include build/patch16t.exe patch16.exe patch16.map
+	rm -rf build/obj build/include build/patcht.exe patch.exe patch.map
 
 .PHONY: test test-grdos clean

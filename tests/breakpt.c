@@ -1,4 +1,4 @@
-/* p16_test_point for tests/run.sh's test build, patch16t.exe.
+/* p16_test_point for tests/run.sh's test build, build/patcht.exe.
 
    P16BREAK raises Ctrl-Break (INT 23h) at a point, as DOS would on
    seeing the key; P16LOSE deletes the file named there, to make the next

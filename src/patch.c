@@ -101,7 +101,7 @@ static bool out_line PARAMS ((LINENUM));
 static void put_define PARAMS ((char const *));
 static bool same_line PARAMS ((char const *, size_t, char const *, size_t));
 
-char const program_name[] = "patch16";
+char const program_name[] = "patch";	/* patch16: the DOS command */
 
 /* Apply a set of diffs as appropriate. */
 

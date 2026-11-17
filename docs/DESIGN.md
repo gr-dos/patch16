@@ -5,7 +5,8 @@
 **Implementation language:** C89-compatible C, limited 8086 assembly only where justified  
 **Toolchain:** Open Watcom C; `libc16` as the C runtime  
 **Source baseline:** GNU `patch` 2.2 (1997) under its published GPL-2.0-or-later terms. This was decided 2026-10-28 and supersedes the plan below to port Larry Wall's 1988 `patch` 2.0 pl12 directly; see `docs/LICENSE-RESEARCH.md` §8 and §14 below.  
-**Companion project:** `diff16` (separate; not a prerequisite)
+**Companion project:** `diff16` (separate; not a prerequisite)  
+**Executable:** `PATCH.EXE`, the DOS command `PATCH` (issue #4); the project and repository are `patch16`
 
 ## 1. Summary
 
@@ -129,13 +130,13 @@ Keep the format parser distinct from the application engine so unified diffs can
 
 ## 5. Initial user interface
 
-Illustrative commands (final option syntax can change after examining Wall's original CLI):
+Illustrative commands (final option syntax can change after examining Wall's original CLI). The program is `PATCH.EXE`, run as `PATCH`; `patch16` names the project:
 
 ```dos
-PATCH16 -p1 < UPDATE.PAT
-PATCH16 SOURCE.C UPDATE.PAT
-PATCH16 -n -p1 < UPDATE.PAT
-PATCH16 -o RESULT.C SOURCE.C UPDATE.PAT
+PATCH -p1 < UPDATE.PAT
+PATCH SOURCE.C UPDATE.PAT
+PATCH -n -p1 < UPDATE.PAT
+PATCH -o RESULT.C SOURCE.C UPDATE.PAT
 ```
 
 Proposed options:
@@ -250,7 +251,7 @@ Test:
 - Build and execute with DOSBox-X for fast unit/behavior tests; use QEMU for reproducible GR-DOS integration tests, with all modifications confined to disposable images.
 - Test on MS-DOS-compatible environments as a cross-check where available.
 - Test at least one original 8088/8086 environment or a suitably accurate emulation configuration; verify instruction compatibility, not merely successful execution under a 386-class emulator.
-- Provide an integration fixture: create a source file on Linux, generate `diff -u`, put the old file and patch on a GR-DOS floppy/hard-disk image, run `PATCH16`, and verify the resulting file byte-for-byte after normalized/newline-aware comparison.
+- Provide an integration fixture: create a source file on Linux, generate `diff -u`, put the old file and patch on a GR-DOS floppy/hard-disk image, run `PATCH`, and verify the resulting file byte-for-byte after normalized/newline-aware comparison.
 - Add tests for avoiding proprietary runtime linkage and regression checks for `libc16` integration across the selected model.
 
 ## 10. Exploration milestones and release gates
@@ -334,3 +335,7 @@ Recorded from https://github.com/gr-dos/patch16/pull/1#issuecomment-6468026597. 
   - binary-mode I/O with deliberate CRLF/`^Z` handling;
   - collision-safe temp files and rollback;
   - tests for malformed input at 16-bit boundaries and `diff -u` round trips.
+
+## 15. Executable name (issue #4)
+
+The program is `PATCH.EXE`, so the DOS command is `PATCH`, the conventional name; the project and repository stay `patch16`. The build makes `patch.exe` and the test build `build/patcht.exe`. Each release attaches `patch.exe`, which GR-DOS's `dist16` takes as the program of `gr-dos/patch16` (`STEM.exe`, the repository name without `16`); a release must not also carry `patch16.exe`, which would make two candidates. No GR-DOS command is named `PATCH`. Usage, `--version` (`patch (patch16) VERSION (GNU patch 2.2)`) and the `patch:` prefix of fatal messages name the command; messages about what the port cannot do (`patch16 does not apply a rename`) and its limits name the project.

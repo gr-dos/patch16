@@ -2,7 +2,7 @@
 #
 # The Linux-to-DOS round-trip corpus (docs/DESIGN.md, E3): old and new
 # file trees made on Linux, patches for them made by GNU diff and Git,
-# patch16 applying each patch to the old tree on DOS, and the result
+# PATCH.EXE applying each patch to the old tree on DOS, and the result
 # compared byte for byte with the new tree.
 #
 # Cases (case_NN below) make a/, the old tree, and b/, the new one, and
@@ -27,8 +27,8 @@
 # Each producer's runs go on a disk of their own (a 1.44 MB floppy for
 # GR-DOS), DIR/dos/<producer>: RUN.BAT, RC.BAT and T\<run>\, where <run>
 # is case, producer, line ends (01UL); the patch is T\<run>\P.PAT,
-# patch16's output O.TXT and its exit status R.TXT. RUN.BAT runs
-# \PATCH16 -p1 -i P.PAT in each, on the current drive.
+# PATCH's output O.TXT and its exit status R.TXT. RUN.BAT runs
+# \PATCH -p1 -i P.PAT in each, on the current drive.
 #
 # usage:
 #   tests/corpus.sh make DIR             make the corpus in DIR
@@ -310,7 +310,7 @@ EOF
                     else cp "$ws/$p.pat" "$rd/P.PAT"; fi
                 fi
                 want_tree "$ws/t" "$ws/w" "$e" "$dir/want/$run"
-                printf 'echo RUN %s\r\ncd \\T\\%s\r\n\\PATCH16 -p1 -i P.PAT >O.TXT\r\ncall \\RC\r\n' \
+                printf 'echo RUN %s\r\ncd \\T\\%s\r\n\\PATCH -p1 -i P.PAT >O.TXT\r\ncall \\RC\r\n' \
                     "$run" "$run" >> "$dir/dos/$p/RUN.BAT"
                 echo "$run" >> "$dir/dos/$p/runs"
             done
@@ -325,7 +325,7 @@ EOF
 
 # check_runs DIR GOT P [CONSOLE]: CONSOLE is what the console showed (on
 # GR-DOS, through CTTY AUX), with "RUN <run>" before each run; a failed
-# run's part of it is shown, for patch16's standard error
+# run's part of it is shown, for PATCH's standard error
 check_runs() {
     dir=$1 got=$2 p=$3 console=${4:-}
     pass=0 fail=0
@@ -367,7 +367,7 @@ run_dosbox() {
     exe=$1 dir=$2
     status=0
     for p in $PRODUCERS; do
-        cp "$exe" "$dir/dos/$p/PATCH16.EXE"
+        cp "$exe" "$dir/dos/$p/PATCH.EXE"
         SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout -k 10 600 \
             "$DOSBOX" -defaultconf -silent -nogui -nomenu \
             -set "dosbox machine=cga" -set "cpu cputype=8086" \
@@ -383,7 +383,7 @@ run_grdos() {
     exe=$1 dir=$2
     status=0
     for p in $PRODUCERS; do
-        cp "$exe" "$dir/dos/$p/PATCH16.EXE"
+        cp "$exe" "$dir/dos/$p/PATCH.EXE"
         if ! sh "$top/tests/grdos.sh" "$dir/dos/$p" "$dir/grdos-$p"; then
             echo "FAIL: $p: the GR-DOS run did not finish"
             status=1
