@@ -249,7 +249,8 @@ printf 'first\nsecond\nthird\n' > dc.txt
 printf 'first\nSECOND\nthird\n' > want/dc-new.txt
 "$HOSTDIFF" -c --label a/dc.txt --label b/dc.txt dc.txt want/dc-new.txt > dc.pat
 
-# a patch that deletes a file (+++ /dev/null): not if a hunk fails, and
+# a patch that deletes a file (+++ /dev/null): not if a hunk fails (-f,
+# as the hunk reversed would create the file, and patch16 would ask), and
 # with -b the original is kept as the backup
 printf 'a\nb\n' > v.c
 printf 'a\nb\n' > w.c
@@ -394,7 +395,7 @@ patch16 -D X -p1 -i df.pat >o50.txt
 call rc 50
 patch16 -D X -p1 -i dc.pat >o51.txt
 call rc 51
-patch16 -p1 -i v.pat >o56.txt
+patch16 -f -p1 -i v.pat >o56.txt
 call rc 56
 patch16 -b -p1 -i w.pat >o57.txt
 call rc 57
