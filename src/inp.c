@@ -149,6 +149,7 @@ get_input_file (filename, outname)
      char const *outname;
 {
 
+    p16_created (0);	/* patch16 */
     if (inerrno == -1)
       inerrno = stat (inname, &instat) == 0 ? 0 : errno;
     if (inerrno && ok_to_create_file) {
@@ -166,6 +167,7 @@ get_input_file (filename, outname)
       if (fd < 0)
 	inerrno = errno;
       else {
+	p16_created (inname);	/* patch16: removed if not patched */
 	inerrno = fstat (fd, &instat) == 0 ? 0 : errno;
 	if (close (fd) != 0)
 	  inerrno = errno;

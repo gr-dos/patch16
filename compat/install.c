@@ -22,6 +22,13 @@ along with this program; see the file COPYING.
    that fails, FILE back. Until the new version is in place the original
    is remembered, so that a fatal error puts it back too.
 
+   Across drives the new version is copied rather than renamed. A copy
+   that fails (a disk full) is taken back: a file the copy was making
+   where none was before is removed, and an original moved aside is put
+   back over it. The empty file patch makes for a file a patch creates
+   is not an original: it is removed, before the new file goes in and
+   if patch16 stops before then.
+
    The same refusal makes rename a safe test for a free name: a backup or
    reject never replaces an existing file, it takes the next name
    (FOO.ORG, FOO.OR1, ... FOO.OR9) instead. */
@@ -40,6 +47,13 @@ void say (char const *, ...);
 /* The file moved aside and where it is, until the new version is in. */
 static char const *pending_file;
 static char *pending_aside;
+
+/* A file a copy is making where there was none, until it is complete. */
+static char const *pending_copy;
+
+/* The empty file made for a file the patch creates, until it is
+   replaced. */
+static char *created;
 
 static int
 exists (char const *name)
@@ -102,12 +116,34 @@ p16_read_only (char const *name)
 	 && !(st.st_mode & S_IWRITE);
 }
 
-/* Put the original back, if a new version was not put in its place. */
+/* NAME is an empty file made to be patched (inp.c), or none is (0). */
+void
+p16_created (char const *name)
+{
+  free (created);
+  created = 0;
+  if (name && !(created = strdup (name)))
+    fatal ("out of memory");
+}
+
+/* Remove a partial copy, or a file made empty to be patched, and put
+   the original back, if a new version was not put in its place. */
 void
 p16_restore (void)
 {
   char const *file = pending_file;
   char *aside = pending_aside;
+  if (created)
+    {
+      unlink (created);
+      p16_created (0);
+    }
+  if (pending_copy)
+    {
+      char const *copy = pending_copy;
+      pending_copy = 0;
+      unlink (copy);
+    }
   if (!aside)
     return;
   pending_file = 0;
@@ -128,6 +164,12 @@ p16_move_file (char const *from, char const *to, char *bakname)
   char *aside = 0;
   int keep = bakname != 0;
 
+  if (created && strcmp (created, to) == 0)
+    {
+      unlink (to);
+      p16_created (0);
+    }
+
   if (exists (to))
     {
       aside = keep ? bakname : aside_name (to);
@@ -145,8 +187,12 @@ p16_move_file (char const *from, char const *to, char *bakname)
       if (errno != EXDEV)
 	pfatal ("Can't rename `%s' to `%s'", from, to);
       /* Another drive: copy_file exits through fatal on an error, and
-	 p16_restore takes back the partial copy. */
+	 p16_restore takes back the partial copy, putting back the
+	 original if there was one. */
+      if (!aside)
+	pending_copy = to;
       copy_file (from, to);
+      pending_copy = 0;
       unlink (from);
     }
 
@@ -175,7 +221,11 @@ p16_move_new (char const *from, char *name)
       set_try (name, n);
       if (!exists (name))
 	{
+	  /* copy_file exits through fatal on an error, and p16_restore
+	     removes the partial copy. */
+	  pending_copy = name;
 	  copy_file (from, name);
+	  pending_copy = 0;
 	  unlink (from);
 	  return;
 	}
