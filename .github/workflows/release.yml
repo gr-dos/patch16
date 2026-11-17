@@ -2,7 +2,8 @@ name: release
 
 # main only changes by merging a PR, so a push to main is a merge.
 # If VERSION names a version without a tag, tag the merge commit and
-# publish a release with patch16.exe attached.
+# publish a release with patch16.exe, the source of the libc16 release
+# linked into it, and the license notices attached.
 
 on:
   push:
@@ -49,6 +50,12 @@ jobs:
           make
           make test
 
+      # The source of the libc16 release linked in, the notices, and a
+      # description saying where the source is and how to build it.
+      - name: Release files
+        if: steps.version.outputs.new == 'true'
+        run: scripts/release-files build/release
+
       - name: Create release
         if: steps.version.outputs.new == 'true'
         env:
@@ -56,6 +63,10 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           gh release create "v$VERSION" patch16.exe \
+            build/release/libc16-*-src.tar.gz \
+            build/release/LICENSE-libc16.txt \
+            build/release/GPL-2.0.txt \
             --target "$GITHUB_SHA" \
             --title "v$VERSION" \
+            --notes-file build/release/notes.md \
             --generate-notes

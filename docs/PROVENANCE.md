@@ -66,6 +66,8 @@ Each change is commented `patch16:` in the source; `git log -p src/` shows it ag
 
 - `scripts/fetch-libc16`: a copy of libc16's `consumers/fetch-libc16` (MIT, gr-dos/libc16), with only `version` and `sha256` set to libc16 0.05's published release (`libc16-0.05.zip.sha256`). libc16 is linked into `patch16.exe` and remains MIT; no patch16 or GNU code goes into it.
 - `scripts/fetch-upstream`: patch16's own.
+- `scripts/check-link`: patch16's own. Run on every link of `patch16.exe`; from the linker's map it checks that every module is one of patch16's objects or a member of `LIBC16C.LIB`, and that no other library was used, so no Open Watcom runtime code is in the executable.
+- `scripts/release-files`: patch16's own. Makes what a release carries beside `patch16.exe`: the source of the pinned libc16 release (`git archive` of its tag), libc16's MIT notice, the GPL, and the release description with the checksums. patch16's own source is the release tag.
 
 ## Historical material
 

@@ -30,3 +30,9 @@ jobs:
 
       - name: Test
         run: make test
+
+      # As release.yml makes them; build/release is not published here.
+      - name: Release files
+        run: |
+          scripts/release-files build/release
+          cat build/release/notes.md

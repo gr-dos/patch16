@@ -36,6 +36,9 @@ HDRS = $(wildcard src/*.h compat/include/*.h) build/include/patchlevel.h
 patch16.exe: $(OBJS) $(LIBC16) $(TOOLS_ENV)
 	$(WATCOM_ENV) && wlink option quiet, nodefaultlibs, map=patch16.map \
 	  format dos name $@ $(foreach o,$(OBJS),file $(o)) library $(LIBC16)
+	scripts/check-link patch16.map $(LIBC16) $(OBJS) > build/link.txt \
+	  || { rm -f $@; exit 1; }
+	tail -1 build/link.txt
 
 build/patch16t.exe: $(TOBJS) $(LIBC16) $(TOOLS_ENV)
 	$(WATCOM_ENV) && wlink option quiet, nodefaultlibs \
