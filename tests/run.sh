@@ -248,6 +248,18 @@ printf 'one\r\n#ifndef X\r\ntwo\r\n#else\r\nTWO\r\n2b\r\n#endif /* X */\r\nthree
 printf 'first\nsecond\nthird\n' > dc.txt
 printf 'first\nSECOND\nthird\n' > want/dc-new.txt
 "$HOSTDIFF" -c --label a/dc.txt --label b/dc.txt dc.txt want/dc-new.txt > dc.pat
+
+# a patch that deletes a file (+++ /dev/null): not if a hunk fails (-f,
+# as the hunk reversed would create the file, and patch16 would ask), and
+# with -b the original is kept as the backup
+printf 'a\nb\n' > v.c
+printf 'a\nb\n' > w.c
+printf -- '--- a/v.c\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-a\n-c\n' > v.pat
+printf -- '--- a/w.c\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-a\n-b\n' > w.pat
+# a patch that creates a file (--- /dev/null) fails on one that exists;
+# a hunk at line 0 that does not say so inserts at the top (diff -U0)
+printf 'x\n' > y.c
+printf -- '--- /dev/null\n+++ b/y.c\n@@ -0,0 +1 @@\n+new\n' > y.pat
 printf 'first\n#ifndef X\nsecond\n#else\nSECOND\n#endif /* X */\nthird\n' > want/dc.txt
 
 cat > rc.bat <<'EOF'
@@ -387,6 +399,12 @@ patch16 -D X -p1 -i df.pat >o50.txt
 call rc 50
 patch16 -D X -p1 -i dc.pat >o51.txt
 call rc 51
+patch16 -f -p1 -i v.pat >o56.txt
+call rc 56
+patch16 -b -p1 -i w.pat >o57.txt
+call rc 57
+patch16 -p1 -i y.pat >o58.txt
+call rc 58
 if not exist patch16t.exe goto nobreak
 rem --- Ctrl-Break: while applying it cleans up and exits 2; between the
 rem --- renames that install the file it is ignored
@@ -471,13 +489,13 @@ if command -v git >/dev/null; then
     (
         cd repo && git init -q &&
         printf 'one\ntwo\nthree\n' > t1.c &&
-        head -c 300 /dev/urandom > img.bin &&
+        printf 'IMG\000\001\002\003old\377\n' > img.bin &&
         seq 1 20 > r_old.c && seq 100 130 > m_old.c && seq 200 230 > c_src.c &&
         printf 'echo hi\n' > x.sh && printf 'echo hi\n' > e.sh &&
         printf 'gone\nsoon\n' > d.c &&
         git add . && git -c user.email=t@t -c user.name=t commit -q -m 1 &&
         printf 'one\nTWO\nthree\n' > t1.c &&
-        head -c 300 /dev/urandom > img.bin &&
+        printf 'IMG\000\001\002\003new\377\n' > img.bin &&
         git mv r_old.c r_new.c && git mv m_old.c m_new.c &&
         sed -i 's/^115$/one hundred fifteen/' m_new.c &&
         cp c_src.c c_dst.c && chmod +x x.sh && chmod +x e.sh &&
@@ -694,6 +712,19 @@ rc 50 0
 same "step 50: -D, CR LF file" DF.TXT want/df.txt
 rc 51 0
 same "step 51: -D, context diff" DC.TXT want/dc.txt
+rc 56 1
+printf 'a\nb\n' > want/vw.c
+same "step 56: a delete that fails keeps the file" V.C want/vw.c
+rc 57 0
+absent "step 57: deleted" w.c
+absent "step 57: deleted" W.C
+same "step 57: the original kept as the backup" W.ORG want/vw.c
+rc 58 1
+printf 'x\n' > want/y.c
+same "step 58: not created over an existing file" Y.C want/y.c
+if tr -d '\r' < O58.TXT | grep -q 'attempted to create file'; then ok; else
+    not_ok "step 58: no message"; tr -d '\r' < O58.TXT | sed 's/^/    /'
+fi
 
 while read -r n f; do
     rc $n 0
@@ -729,7 +760,8 @@ EOF
         same "$g: copied file unchanged" $g/c_src.c want/git/c_src.c
         absent "$g: no rename target" $g/R_NEW.C
         absent "$g: no copy target" $g/C_DST.C
-        if [ -s $g/D.C ]; then not_ok "$g: deleted file not emptied"; else ok; fi
+        absent "$g: deleted file removed" $g/D.C
+        absent "$g: deleted file removed" $g/d.c
     done
 elif command -v git >/dev/null; then
     not_ok "Git steps: could not make the Git patches"
@@ -801,7 +833,7 @@ if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftove
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|trunc|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patch16t\.exe|M\.ORG|fd\.img|xd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|trunc|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patch16t\.exe|M\.ORG|W\.ORG|fd\.img|xd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------

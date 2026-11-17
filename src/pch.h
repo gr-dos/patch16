@@ -14,6 +14,8 @@ bool pch_swap PARAMS ((void));
 bool pch_write_line PARAMS ((LINENUM, FILE *));
 bool pch_eol_crlf PARAMS ((void));
 int pch_not_applied PARAMS ((void));
+bool pch_deletes_file PARAMS ((void));
+bool pch_creates_file PARAMS ((void));
 bool there_is_another_patch PARAMS ((void));
 char *pfetch PARAMS ((LINENUM));
 char pch_char PARAMS ((LINENUM));

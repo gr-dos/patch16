@@ -20,16 +20,20 @@ jobs:
 
       # tests/run.sh needs DOSBox-X; mtools runs the disk-full step and git
       # (already on the runner) the Git steps, which are skipped without them.
-      - name: Install DOSBox-X and mtools
+      - name: Install DOSBox-X, QEMU and mtools
         run: |
           sudo apt-get update
-          sudo apt-get install -y dosbox-x mtools
+          sudo apt-get install -y dosbox-x qemu-system-x86 mtools
 
       - name: Build
         run: make
 
       - name: Test
         run: make test
+
+      # The round-trip corpus on GR-DOS (scripts/fetch-grdos), in QEMU.
+      - name: Test on GR-DOS
+        run: make test-grdos
 
       # As release.yml makes them; build/release is not published here.
       - name: Release files

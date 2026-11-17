@@ -291,7 +291,8 @@ char **argv;
 		    say ("Hunk #%d ignored at %ld.\n", hunk, newwhere);
 	    }
 	    else if (!where
-		     || (where == 1 && ok_to_create_file && input_lines)) {
+		     || (where == 1 && ok_to_create_file && input_lines
+			 && pch_creates_file ())) {	/* patch16 */
 		if (where)
 		  say ("\nPatch attempted to create file `%s', which already exists.\n", inname);
 		abort_hunk();
@@ -346,14 +347,21 @@ char **argv;
       if (!skip_rest_of_patch && !output) {
 	  struct stat statbuf;
 
-	  if (remove_empty_files
+	  /* patch16: a file the patch deletes (pch_deletes_file) is
+	     removed as -E removes one, if every hunk applied and it is
+	     empty; with -b the original is kept as its backup.  */
+	  if ((remove_empty_files || (pch_deletes_file () && !failed))
 	      && stat (TMPOUTNAME, &statbuf) == 0
 	      && statbuf.st_size == 0)
 	    {
 	      if (verbosity == VERBOSE)
 		say ("Removing %s (empty after patching).\n", outname);
 	      if (! dry_run)
-		unlink (outname);
+		{
+		  if (backup)
+		    move_file (TMPOUTNAME, outname, backup);
+		  unlink (outname);
+		}
 	    }
 	  else
 	    {

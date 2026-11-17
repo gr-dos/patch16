@@ -38,17 +38,18 @@ jobs:
       # make fetches the pinned libc16 release (scripts/fetch-libc16) and
       # the Open Watcom snapshot it names.
 
-      - name: Install DOSBox-X and mtools
+      - name: Install DOSBox-X, QEMU and mtools
         if: steps.version.outputs.new == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y dosbox-x mtools
+          sudo apt-get install -y dosbox-x qemu-system-x86 mtools
 
       - name: Build and test
         if: steps.version.outputs.new == 'true'
         run: |
           make
           make test
+          make test-grdos
 
       # The source of the libc16 release linked in, the notices, and a
       # description saying where the source is and how to build it.
