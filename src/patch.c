@@ -50,6 +50,8 @@ static void cleanup PARAMS ((void));
 static void get_some_switches PARAMS ((void));
 static void init_output PARAMS ((char const *));
 static void init_reject PARAMS ((char const *));
+static void open_reject PARAMS ((void));
+static void close_reject PARAMS ((void));
 static void reinitialize_almost_everything PARAMS ((void));
 static void usage PARAMS ((FILE *, int)) __attribute__((noreturn));
 
@@ -328,7 +330,7 @@ char **argv;
 		fclose (ofp);
 		ofp = 0;
 	      }
-	    fclose (rejfp);
+	    close_reject ();
 	    continue;
 	}
 
@@ -344,37 +346,12 @@ char **argv;
 
       /* and put the output where desired */
       ignore_signals ();
-      if (!skip_rest_of_patch && !output) {
-	  struct stat statbuf;
-
-	  /* patch16: a file the patch deletes (pch_deletes_file) is
-	     removed as -E removes one, if every hunk applied and it is
-	     empty; with -b the original is kept as its backup.  */
-	  if ((remove_empty_files || (pch_deletes_file () && !failed))
-	      && stat (TMPOUTNAME, &statbuf) == 0
-	      && statbuf.st_size == 0)
-	    {
-	      if (verbosity == VERBOSE)
-		say ("Removing %s (empty after patching).\n", outname);
-	      if (! dry_run)
-		{
-		  if (backup)
-		    move_file (TMPOUTNAME, outname, backup);
-		  unlink (outname);
-		}
-	    }
-	  else
-	    {
-	      if (! dry_run)
-		{
-		  move_file (TMPOUTNAME, outname, backup);
-		  chmod (outname, instat.st_mode);
-		}
-	    }
-      }
+      /* patch16: the rejects are saved first, so that a reject that
+	 cannot be saved (a full disk) stops patch16 with the file not
+	 changed, rather than with some of its hunks applied and the rest
+	 lost.  */
       {
-	if (fclose (rejfp) != 0)
-	    write_fatal ();
+	close_reject ();
 	if (failed) {
 	    somefailed = TRUE;
 	    say ("%d out of %d hunk%s %s", failed, hunk, "s" + (hunk == 1),
@@ -400,6 +377,36 @@ char **argv;
 	    }
 	    say ("\n");
 	}
+      }
+      if (!skip_rest_of_patch && !output) {
+	  struct stat statbuf;
+
+	  /* patch16: a file the patch deletes (pch_deletes_file) is
+	     removed as -E removes one, if every hunk applied and it is
+	     empty; with -b the original is kept as its backup.  When a
+	     hunk failed, the original is kept as a backup without -b, as
+	     later GNU releases do (--backup-if-mismatch).  */
+	  if ((remove_empty_files || (pch_deletes_file () && !failed))
+	      && stat (TMPOUTNAME, &statbuf) == 0
+	      && statbuf.st_size == 0)
+	    {
+	      if (verbosity == VERBOSE)
+		say ("Removing %s (empty after patching).\n", outname);
+	      if (! dry_run)
+		{
+		  if (backup || failed)
+		    move_file (TMPOUTNAME, outname, TRUE);
+		  unlink (outname);
+		}
+	    }
+	  else
+	    {
+	      if (! dry_run)
+		{
+		  move_file (TMPOUTNAME, outname, backup || failed);
+		  chmod (outname, instat.st_mode);
+		}
+	    }
       }
       set_signals (1);
     }
@@ -790,6 +797,7 @@ abort_hunk()
     char const *minuses =
       (int) NEW_CONTEXT_DIFF <= (int) diff_type ? " ----" : " -----";
 
+    open_reject ();			/* patch16 */
     fprintf(rejfp, "***************\n");
     for (i=0; i<=pat_end; i++) {
 	switch (pch_char(i)) {
@@ -989,15 +997,40 @@ init_output(name)
 	pfatal ("can't create %s", name);
 }
 
-/* Open a file to put hunks we can't locate. */
+/* Open a file to put hunks we can't locate.
+   patch16: only when abort_hunk has one to put there, so that a patch
+   that applies needs one DOS file handle fewer (with FILES=8, DOS's
+   default, every one counts).  */
+
+static char const *rejfp_name;
 
 static void
 init_reject(name)
      char const *name;
 {
-    rejfp = fopen(name, "wb");
+    rejfp = 0;
+    rejfp_name = name;
+}
+
+static void
+open_reject ()
+{
+    if (rejfp)
+	return;
+    rejfp = fopen(rejfp_name, "wb");
     if (!rejfp)
-	pfatal ("can't create %s", name);
+	pfatal ("can't create %s", rejfp_name);
+}
+
+/* patch16: close the reject file, if it was opened.  */
+
+static void
+close_reject ()
+{
+    FILE *fp = rejfp;
+    rejfp = 0;
+    if (fp && fclose (fp) != 0)
+	write_fatal ();
 }
 
 /* Copy input file to output, up to wherever hunk is to be applied. */

@@ -262,6 +262,30 @@ printf 'x\n' > y.c
 printf -- '--- /dev/null\n+++ b/y.c\n@@ -0,0 +1 @@\n+new\n' > y.pat
 printf 'first\n#ifndef X\nsecond\n#else\nSECOND\n#endif /* X */\nthird\n' > want/dc.txt
 
+# file names from a patch (compat/path.c), run in safe: names that leave
+# the directory, start at the root, name a drive or a device, or are not
+# 8.3 are not patched (status 1); the next file in the patch still is
+mkdir safe safe/sub2
+for f in ../esc.c /abs.c 'c:\drv.c' nul.c longname.txt ok.c; do
+    printf -- '--- /dev/null\n+++ %s\n@@ -0,0 +1 @@\n+x\n' "$f"
+done > safe/h.pat
+# DOS's \ in a patch's names, as / is
+cp orig/hello.c safe/sub2/bs.c
+sed 's#^\(---\|+++\) \([ab]\)/hello\.c#\1 \2\\sub2\\bs.c#' hello.pat > safe/bs.pat
+# an unsafe name beside a safe one: the safe one is patched
+cp orig/hello.c safe/dr.c
+sed 's#^--- a/hello\.c#--- a/../dr.c#; s#^+++ b/hello\.c#+++ b/dr.c#' hello.pat > safe/dr.pat
+# a NUL byte in a hunk line is refused (2), unified and context; one in
+# the file patched is copied as it is
+cp orig/hello.c safe/nu.c
+cp orig/hello.c safe/nc.c
+printf -- '--- a/nu.c\n+++ b/nu.c\n@@ -1,3 +1,4 @@\n first\n+n\000ew\n second\n third\n' > safe/nu.pat
+printf -- '*** a/nc.c\n--- b/nc.c\n***************\n*** 1,3 ****\n--- 1,4 ----\n  first\n+ n\000ew\n  second\n  third\n' > safe/nc.pat
+printf 'a\000b\n1\n2\n3\n4\n5\nfirst\nsecond\n' > orig/nb.txt
+printf 'a\000b\n1\n2\n3\n4\n5\nfirst\nnew\nsecond\n' > want/nb.txt
+cp orig/nb.txt safe/nb.txt
+"$HOSTDIFF" -a -u --label a/nb.txt --label b/nb.txt orig/nb.txt want/nb.txt > safe/nb.pat
+
 cat > rc.bat <<'EOF'
 @echo off
 if errorlevel 2 goto rc2
@@ -294,7 +318,7 @@ patch -b -p1 -i b.pat >o6.txt
 call rc 6
 patch -R -b -p1 -i b.pat >o7.txt
 call rc 7
-rem --- rejects: an existing C.RE1 is kept
+rem --- rejects: an existing C.RE1 is kept; the original is kept too
 patch -p1 -i c.pat >o8.txt
 call rc 8
 patch -p1 -i c.pat >o9.txt
@@ -405,6 +429,21 @@ patch -b -p1 -i w.pat >o57.txt
 call rc 57
 patch -p1 -i y.pat >o58.txt
 call rc 58
+rem --- file names from the patch, and NUL bytes
+cd safe
+..\patch -p0 -i h.pat >..\o81.txt
+call ..\rc 81
+..\patch -p1 -i bs.pat >..\o82.txt
+call ..\rc 82
+..\patch -p1 -i dr.pat >..\o83.txt
+call ..\rc 83
+..\patch -p1 -i nu.pat >..\o84.txt
+call ..\rc 84
+..\patch -p1 -i nc.pat >..\o85.txt
+call ..\rc 85
+..\patch -p1 -i nb.pat >..\o86.txt
+call ..\rc 86
+cd ..
 if not exist patcht.exe goto nobreak
 rem --- Ctrl-Break: while applying it cleans up and exits 2; between the
 rem --- renames that install the file it is ignored
@@ -607,14 +646,18 @@ expect 8 <<'EOF'
 patching file c.c
 Hunk #1 FAILED at 1.
 1 out of 1 hunk FAILED--saving rejects to c.REJ
+Saving the original c.c as c.ORG
 EOF
 rc 9 1
 expect 9 <<'EOF'
 patching file c.c
 Hunk #1 FAILED at 1.
 1 out of 1 hunk FAILED--saving rejects to c.RE2
+Saving the original c.c as c.OR1
 EOF
 same "step 8: file unchanged" C.C orig/hello.c
+same "step 8: a hunk failed, so the original is kept" C.ORG orig/hello.c
+same "step 9: and again" C.OR1 orig/hello.c
 printf 'stale\n' > stale.txt
 same "step 9: existing reject kept" C.RE1 stale.txt
 same "step 9: rejects" C.RE2 C.REJ
@@ -651,8 +694,10 @@ expect 15 <<'EOF'
 patching file f.c
 Hunk #1 FAILED at 1.
 1 out of 1 hunk FAILED--saving rejects to f.REJ
+Saving the original f.c as f.ORG
 EOF
 same "step 15: no fuzz" F.C orig/hello.c
+same "step 15: the original kept" F.ORG orig/hello.c
 rc 16 0
 expect 16 <<'EOF'
 patching file g.c
@@ -715,6 +760,7 @@ same "step 51: -D, context diff" DC.TXT want/dc.txt
 rc 56 1
 printf 'a\nb\n' > want/vw.c
 same "step 56: a delete that fails keeps the file" V.C want/vw.c
+same "step 56: and its original" V.ORG want/vw.c
 rc 57 0
 absent "step 57: deleted" w.c
 absent "step 57: deleted" W.C
@@ -725,6 +771,52 @@ same "step 58: not created over an existing file" Y.C want/y.c
 if tr -d '\r' < O58.TXT | grep -q 'attempted to create file'; then ok; else
     not_ok "step 58: no message"; tr -d '\r' < O58.TXT | sed 's/^/    /'
 fi
+
+# either DIR/name: the file as DOSBox-X left it; a file DOS replaced
+# has its name in upper case
+either() {
+    up=$(dirname "$1")/$(basename "$1" | tr a-z A-Z)
+    if [ -f "$up" ]; then echo "$up"; else echo "$1"; fi
+}
+rc 81 1
+expect 81 <<'EOF'
+../esc.c: patch16 does not patch a file outside the current directory; not changed
+Hunk #1 ignored at 1.
+1 out of 1 hunk ignored
+/abs.c: patch16 does not patch a file named from the root; not changed
+Hunk #1 ignored at 1.
+1 out of 1 hunk ignored
+c:/drv.c: patch16 does not patch a file on a named drive; not changed
+Hunk #1 ignored at 1.
+1 out of 1 hunk ignored
+nul.c: patch16 does not patch a DOS device; not changed
+Hunk #1 ignored at 1.
+1 out of 1 hunk ignored
+longname.txt: patch16 does not patch a file whose name is not a DOS 8.3 name; not changed
+Hunk #1 ignored at 1.
+1 out of 1 hunk ignored
+patching file ok.c
+EOF
+for f in ESC.C esc.c ABS.C abs.c DRV.C drv.c; do absent "step 81: outside safe" $f; done
+printf 'x\n' > want/ok.c
+same "step 81: the safe file in the patch" safe/OK.C want/ok.c
+rc 82 0
+same "step 82: \\ in names" "$(either safe/sub2/bs.c)" want/hello.c
+rc 83 0
+expect 83 <<'EOF'
+Ignoring the file name ../dr.c: patch16 does not patch a file outside the current directory
+patching file dr.c
+EOF
+same "step 83: the safe name patched" "$(either safe/dr.c)" want/hello.c
+absent "step 83: outside safe" DR.C
+rc 84 2
+same "step 84: NUL in a unified hunk, unchanged" "$(either safe/nu.c)" orig/hello.c
+rc 85 2
+same "step 85: NUL in a context hunk, unchanged" "$(either safe/nc.c)" orig/hello.c
+rc 86 0
+same "step 86: NUL in the file, kept" "$(either safe/nb.txt)" want/nb.txt
+leftover=$(ls safe | grep -v -x -i -E 'ok\.c|sub2|[a-z0-9]+\.pat|dr\.c|n[uc]\.c|nb\.txt')
+if [ -z "$leftover" ]; then ok; else not_ok "files left behind in safe:" $leftover; fi
 
 while read -r n f; do
     rc $n 0
@@ -833,7 +925,7 @@ if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftove
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|trunc|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patcht\.exe|M\.ORG|W\.ORG|fd\.img|xd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|safe|mal|trunc|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patcht\.exe|M\.ORG|W\.ORG|fd\.img|xd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------

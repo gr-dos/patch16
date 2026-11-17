@@ -30,7 +30,7 @@ CFLAGS = -q -zq -zl -zld -x -mc -0 -os -s -bt=dos -w1 \
 SRCS = src/patch.c src/pch.c src/inp.c src/util.c src/version.c \
        src/addext.c src/argmatch.c src/backupfile.c src/basename.c \
        src/getopt.c src/getopt1.c src/memchr.c \
-       compat/dos.c compat/fmt.c compat/install.c
+       compat/dos.c compat/fmt.c compat/install.c compat/path.c
 OBJS := $(patsubst %.c,build/obj/%.obj,$(SRCS))
 TOBJS := $(OBJS) build/obj/tests/breakpt.obj
 OBJS += build/obj/compat/testpt.obj

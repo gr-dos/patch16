@@ -98,6 +98,17 @@ static bool git_created;		/* "new file mode" */
 static bool p_deletes;			/* the result: the file is gone */
 static bool p_creates;			/* and the file is new */
 static bool header_absent PARAMS ((char const *));
+
+/* patch16: a file name from the patch's headers that patch16 does not
+   write to (compat/path.c), the first one met, and why.  It is dropped
+   from the names to choose from; if no name is left, the file is
+   reported as not changed and its hunks are skipped.  */
+static char *unsafe_name;
+static char const *unsafe_why;
+
+/* patch16: whether the line pget_line read last has a NUL byte.  */
+static bool p_nul_line;
+static size_t hunk_line PARAMS ((void));
 static void git_report PARAMS ((void));
 static void git_section PARAMS ((char const *));
 static char const *find_text PARAMS ((char const *, char const *));
@@ -262,6 +273,24 @@ there_is_another_patch()
     if (p_indent && verbosity != SILENT)
 	say ("(Patch is indented %d space%s.)\n", p_indent, p_indent==1?"":"s");
     skip_to(p_start,p_sline);
+    if (unsafe_name) {			/* patch16 */
+	if (!inname) {
+	    say ("%s: patch16 does not patch %s; not changed\n",
+		 unsafe_name, unsafe_why);
+	    p_not_applied++;
+	    skip_rest_of_patch = TRUE;
+	}
+	else if (verbosity != SILENT)
+	    say ("Ignoring the file name %s: patch16 does not patch %s\n",
+		 unsafe_name, unsafe_why);
+	free (unsafe_name);
+	unsafe_name = 0;
+	if (!inname) {
+	    git_unsupported = 0;	/* reported as unsafe instead */
+	    git_mode = FALSE;
+	    return TRUE;
+	}
+    }
     if (git_unsupported) {		/* patch16 */
 	git_report ();
 	skip_rest_of_patch = TRUE;
@@ -453,6 +482,10 @@ intuit_diff_type()
     hdr_absent_star = hdr_absent_dash = hdr_absent_plus = FALSE; /* patch16 */
     git_deleted = git_created = p_deletes = p_creates = FALSE;
     git_report ();			/* patch16: nothing is noted yet */
+    if (unsafe_name) {			/* patch16 */
+	free (unsafe_name);
+	unsafe_name = 0;
+    }
     Fseek (pfp, p_base, SEEK_SET);
     p_input_line = p_bline - 1;
     for (;;) {
@@ -619,6 +652,24 @@ intuit_diff_type()
        nonexistence of a file if the path length of the existing directory
        in the file name is a maximum among all the candidate file names.  */
 
+    /* patch16: drop the names patch16 does not write to.  */
+    for (i = OLD;  i <= INDEX;  i++)
+      if (!inname && name[i])
+	{
+	  char const *why = p16_unsafe_name (name[i]);
+	  if (why)
+	    {
+	      if (!unsafe_name)
+		{
+		  unsafe_name = name[i];
+		  unsafe_why = why;
+		}
+	      else
+		free (name[i]);
+	      name[i] = 0;
+	    }
+	}
+
     for (i = OLD;  i <= INDEX;  i++)
       if (!inname && name[i])
 	{
@@ -772,7 +823,7 @@ another_hunk (difftype)
 	p_prefix_context = -1;
 	p_hunk_beg = p_input_line + 1;
 	while (p_end < p_max) {
-	    chars_read = get_line ();
+	    chars_read = hunk_line ();
 	    if (chars_read == (size_t) -1)
 	      return -1;
 	    if (!chars_read) {
@@ -1178,7 +1229,7 @@ another_hunk (difftype)
 	p_prefix_context = -1;
 	p_hunk_beg = p_input_line + 1;
 	while (fillsrc <= p_ptrn_lines || filldst <= p_end) {
-	    chars_read = get_line ();
+	    chars_read = hunk_line ();
 	    if (!chars_read) {
 		if (p_max - filldst < 3) {
 		    strcpy (buf, " \n");  /* assume blank lines got chopped */
@@ -1317,7 +1368,7 @@ another_hunk (difftype)
 	}
 	p_Char[0] = '*';
 	for (i=1; i<=p_ptrn_lines; i++) {
-	    chars_read = get_line ();
+	    chars_read = hunk_line ();
 	    if (chars_read == (size_t) -1)
 	      {
 		p_end = i - 1;
@@ -1337,7 +1388,7 @@ another_hunk (difftype)
 	    p_Char[i] = '-';
 	}
 	if (hunk_type == 'c') {
-	    chars_read = get_line ();
+	    chars_read = hunk_line ();
 	    if (chars_read == (size_t) -1)
 	      {
 		p_end = i - 1;
@@ -1357,7 +1408,7 @@ another_hunk (difftype)
 	}
 	p_Char[i] = '=';
 	for (i++; i<=p_end; i++) {
-	    chars_read = get_line ();
+	    chars_read = hunk_line ();
 	    if (chars_read == (size_t) -1)
 	      {
 		p_end = i - 1;
@@ -1488,9 +1539,26 @@ pget_line (indent)
   else
     p_lf_lines++;
 
+  p_nul_line = memchr (b, '\0', i) != 0;	/* patch16 */
   b[i] = '\0';
   p_input_line++;
   return i;
+}
+
+/* patch16: a line of a hunk.  A NUL byte in one is refused: 2.2 keeps
+   some hunk lines as C strings, which would end such a line at the NUL
+   and lose the rest of it, newline and all.  Text from diff and Git
+   has none; diff -a makes them from a binary file.  The files patched
+   may have NULs, which are copied as they are.  */
+
+static size_t
+hunk_line ()
+{
+  size_t n = get_line ();
+  if (n && n != (size_t) -1 && p_nul_line)
+    fatal ("line %ld of the patch has a NUL byte; patch16 takes only text",
+	   p_input_line);
+  return n;
 }
 
 /* patch16: whether most patch lines read so far ended in CR LF.  */

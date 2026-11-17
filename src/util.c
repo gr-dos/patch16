@@ -598,12 +598,14 @@ int strip_leading;
 	say ("fetchname %s %d\n", at, strip_leading);
 
     name = at;
-    /* Strip off up to `sleading' leading slashes and null terminate.  */
+    /* Strip off up to `sleading' leading slashes and null terminate.
+       patch16: a \ is a / as well, as on DOS, and is made one.  */
     for (t = at;  *t;  t++)
-	if (*t == '/')
+	if (*t == '/' || *t == '\\')
 	  {
-	    while (t[1] == '/')
-	      t++;
+	    *t = '/';
+	    while (t[1] == '/' || t[1] == '\\')
+	      *++t = '/';
 	    if (--sleading >= 0)
 		name = t+1;
 	  }

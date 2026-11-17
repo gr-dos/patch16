@@ -57,6 +57,10 @@ void p16_restore (void);
 void p16_created (char const *);
 int p16_read_only (char const *);
 
+/* Why a file name from a patch is not one patch16 writes to, or 0
+   (compat/path.c).  */
+char const *p16_unsafe_name (char const *);
+
 /* libc16 has no memchr; GNU patch's memchr.c provides it.  */
 void *memchr (void const *, int, size_t);
 
