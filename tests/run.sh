@@ -186,15 +186,16 @@ fi
 
 # a disk full on another drive: temp files are made in the current
 # directory, C:, so a target on A: is copied there rather than renamed.
-# xd.img holds XB.TXT (an existing target), XR.REJ (a reject that must
-# not be replaced) and a filler leaving 40 KB. Each copy runs out of
-# room; each must leave the disk as it was: no partial new file, no
-# partial reject, the original put back.
+# xd.img holds XB.TXT (an existing target), XR.TXT (a small file the
+# reject patch fails on), XR.REJ (a reject that must not be replaced)
+# and a filler leaving 40 KB. Each copy runs out of room; each must
+# leave the disk as it was: no new file, not even the empty one patch
+# makes to patch, no partial reject, the original put back.
 #   xn.pat  makes the new file A:\XN.TXT (75 KB)
 #   xb.pat  patches A:\XB.TXT (the new version is 75 KB)
-#   xr.pat  fails its one hunk (1500 lines changed) on xr.txt; its
-#           90 KB reject goes to A:,
-#           as XR.RE1 since XR.REJ exists
+#   xr.pat  fails all eleven of its hunks on A:\XR.TXT, which is put back
+#           unchanged; the 90 KB reject is made as XR.RE1, XR.REJ
+#           being taken
 xfull=0
 if command -v mformat >/dev/null && command -v mcopy >/dev/null &&
     command -v mdir >/dev/null; then
@@ -204,14 +205,14 @@ if command -v mformat >/dev/null && command -v mcopy >/dev/null &&
     sed 's#big\.txt#xb.txt#g' big.pat > xb.pat
     awk 'BEGIN { for (i = 1; i <= 3000; i++) printf "row %d of the original\n", i }' \
         > orig/xr.txt
-    awk '{ if (NR <= 1500) print "changed " $0; else print }' orig/xr.txt > want/xr.txt
+    awk '{ if (NR % 300 < 150) print "changed " $0; else print }' orig/xr.txt > want/xr.txt
     udiff xr.txt > xr.pat
-    awk '{ print "other " $0 }' orig/xr.txt > xr.txt
+    printf 'other\r\n' > XR.TXT
     printf 'keep\r\n' > XR.REJ
     mformat -C -f 360 -i xd.img :: &&
     mcopy -i xd.img orig/big.txt ::XB.TXT &&
-    mcopy -i xd.img XR.REJ ::XR.REJ &&
-    rm XR.REJ &&
+    mcopy -i xd.img XR.TXT XR.REJ :: &&
+    rm XR.TXT XR.REJ &&
     free=$(mdir -i xd.img :: | sed -n 's/^ *\([0-9 ]*\) bytes free.*/\1/p' | tr -d ' ') &&
     fill=$((free - 40960)) &&
     [ "$fill" -gt 0 ] && [ "$fill" -lt 368640 ] &&
@@ -423,7 +424,7 @@ patch16 -i xn.pat a:\xn.txt >o52.txt
 call rc 52
 patch16 -i xb.pat a:\xb.txt >o53.txt
 call rc 53
-patch16 -r a:\xr.rej -i xr.pat xr.txt >o54.txt
+patch16 -i xr.pat a:\xr.txt >o54.txt
 call rc 54
 dir a:\ >o55.txt
 imgmount -u a >nul
@@ -773,14 +774,19 @@ if [ "$xfull" = 1 ]; then
     rc 52 2
     rc 53 2
     rc 54 2
-    for f in XB.TXT XR.REJ; do mcopy -n -i xd.img "::$f" "x-$f"; done
+    if tr -d '\r' < O54.TXT | grep -q 'saving rejects to'; then ok; else
+        not_ok "step 54: no reject made"; tr -d '\r' < O54.TXT | sed 's/^/    /'
+    fi
+    for f in XB.TXT XR.TXT XR.REJ; do mcopy -n -i xd.img "::$f" "x-$f"; done
     same "step 53: disk full on another drive, original put back" x-XB.TXT orig/big.txt
+    printf 'other\r\n' > want/XR.TXT
     printf 'keep\r\n' > want/XR.REJ
+    same "step 54: file the reject is for, unchanged" x-XR.TXT want/XR.TXT
     same "step 54: existing reject kept" x-XR.REJ want/XR.REJ
-    rm -f x-XB.TXT x-XR.REJ want/XR.REJ
+    rm -f x-XB.TXT x-XR.TXT x-XR.REJ want/XR.TXT want/XR.REJ
     # only what was there before, and the same room
     files=$(tr -d '\r' < O55.TXT | awk '$2 ~ /^[A-Z]+$/ && NF >= 4 { print $1 "." $2 }' | sort | tr '\n' ' ')
-    if [ "$files" = "FILLER.BIN XB.TXT XR.REJ " ] &&
+    if [ "$files" = "FILLER.BIN XB.TXT XR.REJ XR.TXT " ] &&
         tr -d '\r' < O55.TXT | grep -q ' 40,960 Bytes free'; then
         ok
     else
@@ -795,7 +801,7 @@ if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftove
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|trunc|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patch16t\.exe|M\.ORG|fd\.img|xd\.img|XR\.TXT|xr\.txt|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|trunc|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patch16t\.exe|M\.ORG|fd\.img|xd\.imgfull\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------
