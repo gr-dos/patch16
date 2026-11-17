@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# Fetch the pinned GR-DOS release's 1.44 MB boot floppy
+# (github.com/gr-dos/gr-dos) as FILE, checking its SHA-256 against the
+# one below (the release's SHA256SUMS). tests/grdos.sh boots it in QEMU.
+# Reuses FILE if it already has that checksum.
+#
+# usage: scripts/fetch-grdos [FILE]   (default: build/grdos/gr-dos-VERSION-1440k.img)
+#
+# GRDOS_URL, if set, is fetched instead of the release asset; it must
+# have the same SHA-256.
+
+set -eu
+
+version=0.04
+sha256=4d6952348757a2441e7ebdb0d260ffefb225cc5b8d23828c757db56224997960
+
+url=${GRDOS_URL:-https://github.com/gr-dos/gr-dos/releases/download/v$version/gr-dos-$version-1440k.img}
+file=${1:-build/grdos/gr-dos-$version-1440k.img}
+
+if ! { [ -f "$file" ] && echo "$sha256  $file" | sha256sum -c --status; }; then
+  mkdir -p "$(dirname "$file")"
+  rm -f "$file"
+  curl -fsSL -o "$file.tmp" "$url"
+  echo "$sha256  $file.tmp" | sha256sum -c --quiet
+  mv "$file.tmp" "$file"
+fi
+echo "$file"

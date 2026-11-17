@@ -2,7 +2,9 @@
 # libc16, in the compact memory model (docs/DESIGN.md, section 14).
 #   make                         fetch the pinned libc16 release into
 #                                build/libc16, then build patch16.exe
-#   make test                    run the tests (tests/run.sh) under DOSBox-X
+#   make test                    run the tests (tests/run.sh) and the round-trip
+#                                corpus (tests/corpus.sh) under DOSBox-X
+#   make test-grdos              run the round-trip corpus on GR-DOS, in QEMU
 #   make LIBC16_ROOT=../libc16   use a libc16 checkout built with its make
 #
 # The Open Watcom toolchain is the one libc16 was built with: the libc16
@@ -68,8 +70,12 @@ $(TOOLS_ENV): $(LIBC16)
 
 test: patch16.exe build/patch16t.exe
 	sh tests/run.sh $(CURDIR)/patch16.exe $(CURDIR)/build/patch16t.exe
+	sh tests/corpus.sh dosbox $(CURDIR)/patch16.exe
+
+test-grdos: patch16.exe
+	sh tests/corpus.sh grdos $(CURDIR)/patch16.exe
 
 clean:
 	rm -rf build/obj build/include build/patch16t.exe patch16.exe patch16.map
 
-.PHONY: test clean
+.PHONY: test test-grdos clean
