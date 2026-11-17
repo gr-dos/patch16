@@ -1,0 +1,24 @@
+patch16: GNU patch 2.2 for 16-bit MS-DOS (PATCH.EXE)
+
+GNU patch 2.2:
+  Copyright 1984, 1985, 1986, 1987, 1988 Larry Wall
+  Copyright 1989, 1990, 1991, 1992, 1993, 1997 Free Software Foundation, Inc.
+  Written by Larry Wall, with later work by Paul Eggert, Wayne Davison
+  (unified diffs), David MacKenzie and others; see upstream/patch-2.2/README
+  and ChangeLog.
+
+The DOS port, and the changes to GNU patch 2.2's files:
+  Copyright 2026 patch16 contributors
+  Each file changed carries that line under its original notices, and each
+  change is marked "patch16:" in the source. docs/PROVENANCE.md lists what
+  came from GNU patch 2.2, what was changed, and what is new.
+
+patch16 is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 2, or (at your option) any later
+version. It is distributed WITHOUT ANY WARRANTY; see COPYING, the GNU
+General Public License version 2, for details.
+
+PATCH.EXE is linked with libc16 (github.com/gr-dos/libc16), under the MIT
+license, and with no Open Watcom C library code. Its source is the libc16
+release named in dist16.source, released with its own notice.

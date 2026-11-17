@@ -2,8 +2,9 @@ name: release
 
 # main only changes by merging a PR, so a push to main is a merge.
 # If VERSION names a version without a tag, tag the merge commit and
-# publish a release with patch.exe (the DOS command PATCH), the source of
-# the libc16 release linked into it, and the license notices attached.
+# publish a release with patch.exe (the DOS command PATCH), its source,
+# the source of the libc16 release linked into it, and the license notices
+# attached (BUILDING.md, docs/GR-DOS.md).
 
 on:
   push:
@@ -51,11 +52,14 @@ jobs:
           make test
           make test-grdos
 
-      # The source of the libc16 release linked in, the notices, and a
-      # description saying where the source is and how to build it.
+      # patch16's source, the source of the libc16 release linked in, the
+      # notices, and a description saying where the source is and how to
+      # build it; then patch.exe built again from that source, the same.
       - name: Release files
         if: steps.version.outputs.new == 'true'
-        run: scripts/release-files build/release
+        run: |
+          scripts/release-files build/release
+          scripts/check-source build/release/patch16-$(cat VERSION)-src.tar.gz
 
       - name: Create release
         if: steps.version.outputs.new == 'true'
@@ -64,6 +68,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           gh release create "v$VERSION" patch.exe \
+            "build/release/patch16-$VERSION-src.tar.gz" \
             build/release/libc16-*-src.tar.gz \
             build/release/LICENSE-libc16.txt \
             build/release/GPL-2.0.txt \

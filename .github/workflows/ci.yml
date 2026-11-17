@@ -39,4 +39,5 @@ jobs:
       - name: Release files
         run: |
           scripts/release-files build/release
+          scripts/check-source build/release/patch16-$(cat VERSION)-src.tar.gz
           cat build/release/notes.md

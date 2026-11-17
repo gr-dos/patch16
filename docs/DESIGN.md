@@ -274,7 +274,7 @@ Suggested repository layout:
 ```text
 patch16/
   README.md
-  LICENSES/                 # verified GPL text; other applicable grants
+  COPYING                   # the GPL version 2, GNU patch 2.2's (was LICENSES/GPL-2.0.txt)
   docs/
     DESIGN.md
     HISTORY-LICENSE.md     # original notice in context, if appropriate
@@ -339,3 +339,19 @@ Recorded from https://github.com/gr-dos/patch16/pull/1#issuecomment-6468026597. 
 ## 15. Executable name (issue #4)
 
 The program is `PATCH.EXE`, so the DOS command is `PATCH`, the conventional name; the project and repository stay `patch16`. The build makes `patch.exe` and the test build `build/patcht.exe`. Each release attaches `patch.exe`, which GR-DOS's `dist16` takes as the program of `gr-dos/patch16` (`STEM.exe`, the repository name without `16`); a release must not also carry `patch16.exe`, which would make two candidates. No GR-DOS command is named `PATCH`. Usage, `--version` (`patch (patch16) VERSION (GNU patch 2.2)`) and the `patch:` prefix of fatal messages name the command; messages about what the port cannot do (`patch16 does not apply a rename`) and its limits name the project.
+
+## 16. Release (E5)
+
+E5's deliverables, as they stand from 0.02:
+
+| Deliverable | Where |
+|---|---|
+| Binary | `patch.exe`, attached to each release; `scripts/check-link` shows it holds only patch16's and libc16's code |
+| Source | `patch16-VERSION-src.tar.gz`, `git archive` of the release commit, attached; `scripts/check-source` builds the same `patch.exe` from it before the release is made. libc16's source, `libc16-VERSION-src.tar.gz`, is attached beside it |
+| License texts | `COPYING` (GPL version 2, at the root, where GitHub finds it), `NOTICE` (authors, changes, no warranty), libc16's MIT notice |
+| Provenance | `docs/PROVENANCE.md`; `docs/LICENSE-RESEARCH.md` §8 for the GPL grant |
+| Manual | `docs/DOS.md` |
+| Tests | `make test` (DOSBox-X, 8086) and `make test-grdos` (GR-DOS 0.04 in QEMU), on every pull request and before every release |
+| GR-DOS packaging | `dist16.source` and `docs/GR-DOS.md` |
+
+The gate, "CI/test matrix passes; legal and provenance gates complete", is met for patch16's own release. GR-DOS's dist16 also needs a libc16 release with its own source asset before it takes patch16 (`docs/GR-DOS.md`); that is libc16's change to make.

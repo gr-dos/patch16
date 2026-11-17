@@ -1,0 +1,9 @@
+# patch16's corresponding source, for GR-DOS's dist16 (gr-dos/gr-dos,
+# docs/dist16.md; docs/GR-DOS.md here). scripts/release-files checks that
+# it names this VERSION and the libc16 release scripts/fetch-libc16 pins,
+# so change it with either.
+license GPL-2.0-or-later
+source patch16-0.02-src.tar.gz
+build BUILDING.md
+notice NOTICE
+depends gr-dos/libc16 v0.05 libc16-0.05-src.tar.gz
