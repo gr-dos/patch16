@@ -42,7 +42,7 @@ All by patch16 contributors, GPLv2-or-later, written for this port; no code take
 | `compat/include/p16.h`, `unistd.h`, `signal.h`, `assert.h` | POSIX names GNU `patch` uses, mapped onto `libc16` and the adapters below | build |
 | `compat/fmt.c` | message formatter: `%s %c %d %ld %o %%` with a width, nothing else (decision 7) | `tests/run.sh` (messages) |
 | `compat/dos.c` | `isatty`, `fstat` (IOCTL 4400h), `chdir` (3Bh, selecting the drive; the drive and directory are restored by `p16_exit`), `creat` (binary), `tmpnam` (5Ah), checked `atol`; `signal` for SIGINT through an INT 23h handler (Ctrl-Break), and an INT 24h handler that fails critical errors (`p16_init`) | `tests/run.sh` steps 19–20, 37–40 |
-| `compat/testpt.c`, `tests/breakpt.c` | the empty test hook in `patch16.exe`, and the one in the test build that raises Ctrl-Break where `P16BREAK` says | `tests/run.sh` steps 37–40 |
+| `compat/testpt.c`, `tests/breakpt.c` | the empty test hook in `patch.exe`, and the one in the test build (`build/patcht.exe`) that raises Ctrl-Break where `P16BREAK` says | `tests/run.sh` steps 37–40 |
 | `tests/corpus.sh`, `tests/grdos.sh` | the Linux-to-DOS round-trip corpus (PORT-FEASIBILITY.md §9), and the QEMU runner that applies it on GR-DOS | `make test`, `make test-grdos` |
 | `compat/install.c` | safe install: the original moves aside before the new file goes in and is put back on failure; backups and rejects take the next free name, never replacing a file (decision 6); a copy to another drive that fails is taken back, leaving no partial file; a read-only file is refused | `tests/run.sh` steps 1–9, 14, 52–55 |
 
@@ -53,7 +53,7 @@ Each change is commented `patch16:` in the source; `git log -p src/` shows it ag
 | File | Change |
 |---|---|
 | `util.c` | `move_file` builds the backup name as before and calls `p16_move_file`; GNU's same-file search, which never ends on DOS (`st_ino` is always 0), is removed. `copy_file` opens binary. |
-| `patch.c` | generated reject names go through `p16_move_new` (`FOO.REJ`, `FOO.RE1`, …), and the message names the file used; `cleanup` restores an original that was moved aside; a read-only file is refused and its hunks go to the reject file; output and reject files open binary; the program name is `patch16`; fuzz defaults to 0; `-D` puts deleted lines under `#ifndef` (2.2 wrote `#ifdef`; later GNU releases made the same correction, written here independently); `-e` is gone and an ed script is a fatal error; `main` ends through `exit` |
+| `patch.c` | generated reject names go through `p16_move_new` (`FOO.REJ`, `FOO.RE1`, …), and the message names the file used; `cleanup` restores an original that was moved aside; a read-only file is refused and its hunks go to the reject file; output and reject files open binary; the program name is `patch`, the DOS command (issue #4); fuzz defaults to 0; `-D` puts deleted lines under `#ifndef` (2.2 wrote `#ifdef`; later GNU releases made the same correction, written here independently); `-e` is gone and an ed script is a fatal error; `main` ends through `exit` |
 | `addext.c` | an extension beginning with `.` replaces the name's own (`FOO.C` → `FOO.ORG`) |
 | `backupfile.c` | the default suffix is `.ORG` |
 | `basename.c` | `\` and `:` also end a directory or drive prefix |
@@ -66,11 +66,11 @@ Each change is commented `patch16:` in the source; `git log -p src/` shows it ag
 
 ## Build scripts
 
-- `scripts/fetch-libc16`: a copy of libc16's `consumers/fetch-libc16` (MIT, gr-dos/libc16), with only `version` and `sha256` set to libc16 0.05's published release (`libc16-0.05.zip.sha256`). libc16 is linked into `patch16.exe` and remains MIT; no patch16 or GNU code goes into it.
+- `scripts/fetch-libc16`: a copy of libc16's `consumers/fetch-libc16` (MIT, gr-dos/libc16), with only `version` and `sha256` set to libc16 0.05's published release (`libc16-0.05.zip.sha256`). libc16 is linked into `patch.exe` and remains MIT; no patch16 or GNU code goes into it.
 - `scripts/fetch-upstream`: patch16's own.
 - `scripts/fetch-grdos`: patch16's own, on the pattern of `fetch-libc16`. Fetches the pinned GR-DOS release floppy (`gr-dos-0.04-1440k.img`) that `tests/grdos.sh` boots, and checks its SHA-256.
-- `scripts/check-link`: patch16's own. Run on every link of `patch16.exe`; from the linker's map it checks that every module is one of patch16's objects or a member of `LIBC16C.LIB`, and that no other library was used, so no Open Watcom runtime code is in the executable.
-- `scripts/release-files`: patch16's own. Makes what a release carries beside `patch16.exe`: the source of the pinned libc16 release (`git archive` of its tag), libc16's MIT notice, the GPL, and the release description with the checksums. patch16's own source is the release tag.
+- `scripts/check-link`: patch16's own. Run on every link of `patch.exe`; from the linker's map it checks that every module is one of patch16's objects or a member of `LIBC16C.LIB`, and that no other library was used, so no Open Watcom runtime code is in the executable.
+- `scripts/release-files`: patch16's own. Makes what a release carries beside `patch.exe`: the source of the pinned libc16 release (`git archive` of its tag), libc16's MIT notice, the GPL, and the release description with the checksums. patch16's own source is the release tag.
 
 ## Historical material
 

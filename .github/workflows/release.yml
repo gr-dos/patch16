@@ -2,8 +2,8 @@ name: release
 
 # main only changes by merging a PR, so a push to main is a merge.
 # If VERSION names a version without a tag, tag the merge commit and
-# publish a release with patch16.exe, the source of the libc16 release
-# linked into it, and the license notices attached.
+# publish a release with patch.exe (the DOS command PATCH), the source of
+# the libc16 release linked into it, and the license notices attached.
 
 on:
   push:
@@ -63,7 +63,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "v$VERSION" patch16.exe \
+          gh release create "v$VERSION" patch.exe \
             build/release/libc16-*-src.tar.gz \
             build/release/LICENSE-libc16.txt \
             build/release/GPL-2.0.txt \

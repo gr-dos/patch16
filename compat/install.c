@@ -43,6 +43,7 @@ void copy_file (char const *, char const *);
 void fatal (char const *, ...);
 void pfatal (char const *, ...);
 void say (char const *, ...);
+extern char const program_name[];
 
 /* The file moved aside and where it is, until the new version is in. */
 static char const *pending_file;
@@ -151,7 +152,7 @@ p16_restore (void)
   if (exists (file))
     unlink (file);
   if (rename (aside, file) != 0)
-    fprintf (stderr, "patch16: the original %s is saved as %s\n",
+    fprintf (stderr, "%s: the original %s is saved as %s\n", program_name,
 	     file, aside);
 }
 

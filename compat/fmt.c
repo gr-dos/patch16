@@ -91,7 +91,7 @@ put_field (struct sink *k, char const *s, unsigned n, unsigned width)
 static void
 bad_format (char const *format)
 {
-  static char const msg[] = "patch16: **** internal error: unsupported format `";
+  static char const msg[] = "patch: **** internal error: unsupported format `";
   fwrite (msg, 1, sizeof msg - 1, stderr);
   fputs (format, stderr);
   fputs ("'\n", stderr);

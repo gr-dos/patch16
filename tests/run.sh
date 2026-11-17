@@ -1,17 +1,17 @@
 #!/bin/sh
 #
-# Test patch16.exe under DOSBox-X, on an 8086.
+# Test PATCH.EXE, patch16's build of GNU patch, under DOSBox-X, on an 8086.
 #
 # Fixtures and patches are made on the host (patches with the host's
 # diff -u), one batch file runs every DOS-side step, and the results are
-# checked on the host afterwards.  Each step N records patch16's exit
+# checked on the host afterwards.  Each step N records PATCH's exit
 # status in RN.TXT and its standard output in ON.TXT.  DOS cannot
 # redirect standard error, so diagnostics are not checked.  rc.bat
 # uses goto rather than "if errorlevel N echo ... >file" because the
 # DOSBox-X shell opens the redirection even when the test is false.
 #
-# Usage: tests/run.sh [path/to/patch16.exe [path/to/patch16t.exe]]
-# patch16t.exe is the test build (make build/patch16t.exe), which raises
+# Usage: tests/run.sh [path/to/patch.exe [path/to/patcht.exe]]
+# patcht.exe is the test build (make build/patcht.exe), which raises
 # Ctrl-Break where P16BREAK says (tests/breakpt.c); without it those
 # steps are skipped.
 # The Git steps need git to make their patches; without it they are
@@ -24,8 +24,8 @@
 set -u
 
 top=$(cd "$(dirname "$0")/.." && pwd)
-exe=${1:-$top/patch16.exe}
-texe=${2:-$top/build/patch16t.exe}
+exe=${1:-$top/patch.exe}
+texe=${2:-$top/build/patcht.exe}
 DOSBOX=${DOSBOX:-dosbox-x}
 HOSTDIFF=${HOSTDIFF:-diff}
 
@@ -43,9 +43,9 @@ export LC_ALL
 # fixtures
 
 cd "$work" || exit 2
-cp "$exe" patch16.exe
+cp "$exe" patch.exe
 breaks=0
-if [ -f "$texe" ]; then cp "$texe" patch16t.exe; breaks=1; fi
+if [ -f "$texe" ]; then cp "$texe" patcht.exe; breaks=1; fi
 mkdir orig want
 
 # udiff NAME: a -p1 patch from orig/NAME to want/NAME, with a/ and b/
@@ -279,149 +279,149 @@ EOF
 cat > steps.bat <<'EOF'
 @echo off
 rem --- apply
-patch16 -p1 -i a.pat >o1.txt
+patch -p1 -i a.pat >o1.txt
 call rc 1
-patch16 -p1 <d.pat >o2.txt
+patch -p1 <d.pat >o2.txt
 call rc 2
-patch16 -p1 -i s.pat >o3.txt
+patch -p1 -i s.pat >o3.txt
 call rc 3
-patch16 -p1 -i big.pat >o4.txt
+patch -p1 -i big.pat >o4.txt
 call rc 4
-patch16 -p1 -i crlf.pat >o5.txt
+patch -p1 -i crlf.pat >o5.txt
 call rc 5
 rem --- backups: the second does not replace the first
-patch16 -b -p1 -i b.pat >o6.txt
+patch -b -p1 -i b.pat >o6.txt
 call rc 6
-patch16 -R -b -p1 -i b.pat >o7.txt
+patch -R -b -p1 -i b.pat >o7.txt
 call rc 7
 rem --- rejects: an existing C.RE1 is kept
-patch16 -p1 -i c.pat >o8.txt
+patch -p1 -i c.pat >o8.txt
 call rc 8
-patch16 -p1 -i c.pat >o9.txt
+patch -p1 -i c.pat >o9.txt
 call rc 9
 rem --- dry run
-patch16 --dry-run -p1 -i e.pat >o10.txt
+patch --dry-run -p1 -i e.pat >o10.txt
 call rc 10
 rem --- errors
-patch16 -p1 -i nothere.pat >o11.txt
+patch -p1 -i nothere.pat >o11.txt
 call rc 11
-patch16 --bogus >o12.txt
+patch --bogus >o12.txt
 call rc 12
 rem --- version
-patch16 --version >o13.txt
+patch --version >o13.txt
 call rc 13
 rem --- a read-only file is refused, and its hunks are rejects
 attrib +r r.c
-patch16 -p1 -i r.pat >o14.txt
+patch -p1 -i r.pat >o14.txt
 call rc 14
 attrib -r r.c
 rem --- fuzz: none unless asked for
-patch16 -p1 -i f.pat >o15.txt
+patch -p1 -i f.pat >o15.txt
 call rc 15
-patch16 -F2 -p1 -i g.pat >o16.txt
+patch -F2 -p1 -i g.pat >o16.txt
 call rc 16
 rem --- no ed scripts, no -e
-patch16 a.c ed.pat >o17.txt
+patch a.c ed.pat >o17.txt
 call rc 17
-patch16 -e a.c ed.pat >o18.txt
+patch -e a.c ed.pat >o18.txt
 call rc 18
 rem --- -d, and no -p; the directory is current again afterwards
-patch16 -d sub -i ..\t.pat >o19.txt
+patch -d sub -i ..\t.pat >o19.txt
 call rc 19
 cd >o20.txt
 rem --- hostile headers: 21 to 29 fail with status 2
 cd mal
-..\patch16 -p1 -i m1.pat >..\o21.txt
+..\patch -p1 -i m1.pat >..\o21.txt
 call ..\rc 21
-..\patch16 -p1 -i m2.pat >..\o22.txt
+..\patch -p1 -i m2.pat >..\o22.txt
 call ..\rc 22
-..\patch16 -p1 -i m3.pat >..\o23.txt
+..\patch -p1 -i m3.pat >..\o23.txt
 call ..\rc 23
-..\patch16 -p1 -i m4.pat >..\o24.txt
+..\patch -p1 -i m4.pat >..\o24.txt
 call ..\rc 24
-..\patch16 -p1 -i m5.pat >..\o25.txt
+..\patch -p1 -i m5.pat >..\o25.txt
 call ..\rc 25
-..\patch16 -p1 -i m6.pat >..\o26.txt
+..\patch -p1 -i m6.pat >..\o26.txt
 call ..\rc 26
-..\patch16 m7.c m7.pat >..\o27.txt
+..\patch m7.c m7.pat >..\o27.txt
 call ..\rc 27
-..\patch16 -p1 -i m8.pat >..\o28.txt
+..\patch -p1 -i m8.pat >..\o28.txt
 call ..\rc 28
-..\patch16 -p1 -i m9.pat >..\o29.txt
+..\patch -p1 -i m9.pat >..\o29.txt
 call ..\rc 29
 cd ..\trunc
 rem --- truncated: 91 to 93 rejected (1), 94 to 98 fail (2)
-..\patch16 -p1 -i t1.pat >..\o91.txt
+..\patch -p1 -i t1.pat >..\o91.txt
 call ..\rc 91
-..\patch16 -p1 -i t2.pat >..\o92.txt
+..\patch -p1 -i t2.pat >..\o92.txt
 call ..\rc 92
-..\patch16 -p1 -i t3.pat >..\o93.txt
+..\patch -p1 -i t3.pat >..\o93.txt
 call ..\rc 93
-..\patch16 -p1 -i t4.pat >..\o94.txt
+..\patch -p1 -i t4.pat >..\o94.txt
 call ..\rc 94
-..\patch16 t5.c t5.pat >..\o95.txt
+..\patch t5.c t5.pat >..\o95.txt
 call ..\rc 95
-..\patch16 -p1 -i t6.pat >..\o96.txt
+..\patch -p1 -i t6.pat >..\o96.txt
 call ..\rc 96
-..\patch16 t7.c t7.pat >..\o97.txt
+..\patch t7.c t7.pat >..\o97.txt
 call ..\rc 97
-..\patch16 t8.c t8.pat >..\o98.txt
+..\patch t8.c t8.pat >..\o98.txt
 call ..\rc 98
 cd ..
 rem --- the largest hunk and the longest line apply
-patch16 -p1 -i huge.pat >o30.txt
+patch -p1 -i huge.pat >o30.txt
 call rc 30
-patch16 -p1 -i long.pat >o31.txt
+patch -p1 -i long.pat >o31.txt
 call rc 31
 rem --- the line index
-patch16 -p1 -i x1023.pat >o32.txt
+patch -p1 -i x1023.pat >o32.txt
 call rc 32
-patch16 -p1 -i x1024.pat >o33.txt
+patch -p1 -i x1024.pat >o33.txt
 call rc 33
-patch16 -p1 -i x1025.pat >o34.txt
+patch -p1 -i x1025.pat >o34.txt
 call rc 34
-patch16 -p1 -i wide.pat >o35.txt
+patch -p1 -i wide.pat >o35.txt
 call rc 35
-patch16 -p1 -i over.pat >o36.txt
+patch -p1 -i over.pat >o36.txt
 call rc 36
 rem --- line ends
-patch16 -p1 -i dl.pat >o45.txt
+patch -p1 -i dl.pat >o45.txt
 call rc 45
-patch16 -p1 -i ud.pat >o46.txt
+patch -p1 -i ud.pat >o46.txt
 call rc 46
-patch16 -p1 -i mx.pat >o47.txt
+patch -p1 -i mx.pat >o47.txt
 call rc 47
-patch16 -p1 -i em.pat >o48.txt
+patch -p1 -i em.pat >o48.txt
 call rc 48
-patch16 -l -p1 -i ws.pat >o49.txt
+patch -l -p1 -i ws.pat >o49.txt
 call rc 49
-patch16 -D X -p1 -i df.pat >o50.txt
+patch -D X -p1 -i df.pat >o50.txt
 call rc 50
-patch16 -D X -p1 -i dc.pat >o51.txt
+patch -D X -p1 -i dc.pat >o51.txt
 call rc 51
-patch16 -f -p1 -i v.pat >o56.txt
+patch -f -p1 -i v.pat >o56.txt
 call rc 56
-patch16 -b -p1 -i w.pat >o57.txt
+patch -b -p1 -i w.pat >o57.txt
 call rc 57
-patch16 -p1 -i y.pat >o58.txt
+patch -p1 -i y.pat >o58.txt
 call rc 58
-if not exist patch16t.exe goto nobreak
+if not exist patcht.exe goto nobreak
 rem --- Ctrl-Break: while applying it cleans up and exits 2; between the
 rem --- renames that install the file it is ignored
 set P16BREAK=1
-patch16t -d sub -p1 -i ..\k.pat >o37.txt
+patcht -d sub -p1 -i ..\k.pat >o37.txt
 call rc 37
 cd >o38.txt
 set P16BREAK=2
-patch16t -b -p1 -i m.pat >o39.txt
+patcht -b -p1 -i m.pat >o39.txt
 call rc 39
-patch16t -p1 -i n.pat >o40.txt
+patcht -p1 -i n.pat >o40.txt
 call rc 40
 set P16BREAK=
 set P16LOSE=2
-patch16t -p1 -i q.pat >o41.txt
+patcht -p1 -i q.pat >o41.txt
 call rc 41
-patch16t -b -p1 -i u.pat >o42.txt
+patcht -b -p1 -i u.pat >o42.txt
 call rc 42
 set P16LOSE=
 :nobreak
@@ -429,7 +429,7 @@ if not exist fd.img goto nofull
 rem --- a disk full: patch16 fails and the original is kept
 imgmount a fd.img -t floppy >nul
 a:
-c:\patch16 -p1 -i big.pat >c:\o43.txt
+c:\patch -p1 -i big.pat >c:\o43.txt
 call c:\rc 43
 c:
 dir a:\ >o44.txt
@@ -438,11 +438,11 @@ imgmount -u a >nul
 if not exist xd.img goto noxfull
 rem --- a disk full on another drive: each copy fails and is taken back
 imgmount a xd.img -t floppy >nul
-patch16 -i xn.pat a:\xn.txt >o52.txt
+patch -i xn.pat a:\xn.txt >o52.txt
 call rc 52
-patch16 -i xb.pat a:\xb.txt >o53.txt
+patch -i xb.pat a:\xb.txt >o53.txt
 call rc 53
-patch16 -i xr.pat a:\xr.txt >o54.txt
+patch -i xr.pat a:\xr.txt >o54.txt
 call rc 54
 dir a:\ >o55.txt
 imgmount -u a >nul
@@ -470,9 +470,9 @@ printf '%s\n' "$NL_CASES" | while read -r name old new; do
             n) "$HOSTDIFF" orig/$f want/$f > $name$fmt.pat ;;
         esac
         if [ $fmt = n ]; then
-            echo "patch16 $f $name$fmt.pat >o$nl.txt" >> steps.bat
+            echo "patch $f $name$fmt.pat >o$nl.txt" >> steps.bat
         else
-            echo "patch16 -p1 -i $name$fmt.pat >o$nl.txt" >> steps.bat
+            echo "patch -p1 -i $name$fmt.pat >o$nl.txt" >> steps.bat
         fi
         echo "call rc $nl" >> steps.bat
         echo "$nl $f" >> nlsteps.txt
@@ -513,7 +513,7 @@ if command -v git >/dev/null; then
 fi
 if [ "$gits" = 1 ]; then
     for g in gitb gitp; do
-        printf '%s\n' "cd $g" "..\\patch16 -p1 -i ..\\$g.pat >..\\o$g.txt" \
+        printf '%s\n' "cd $g" "..\\patch -p1 -i ..\\$g.pat >..\\o$g.txt" \
             "call ..\\rc $g" "cd .." >> steps.bat
     done
 fi
@@ -522,7 +522,7 @@ fi
 printf 'a\r\nb' > crnl.txt
 printf -- '--- a/crnl.txt\n+++ b/crnl.txt\n@@ -1,2 +1,2 @@\n a\n-b\n\\ No newline at end of file\n+c\n\\ No newline at end of file\n' > crnl.pat
 printf 'a\r\nc' > want/crnl.txt
-echo "patch16 -p1 -i crnl.pat >o80.txt" >> steps.bat
+echo "patch -p1 -i crnl.pat >o80.txt" >> steps.bat
 echo "call rc 80" >> steps.bat
 
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout -k 10 300 \
@@ -633,7 +633,7 @@ rc 11 2
 rc 12 2
 rc 13 0
 check_version() {
-    head -1 O13.TXT | tr -d '\r' | grep -q "^patch16 $(cat "$top/VERSION") (GNU patch 2.2)\$"
+    head -1 O13.TXT | tr -d '\r' | grep -q "^patch (patch16) $(cat "$top/VERSION") (GNU patch 2.2)\$"
 }
 if check_version; then ok; else not_ok "step 13: version"; fi
 
@@ -833,7 +833,7 @@ if [ -z "$leftover" ]; then ok; else not_ok "files left behind in sub:" $leftove
 
 # no temp file is left behind
 leftover=$(ls | grep -v -E '^(O|R)[0-9]+\.TXT$' |
-    grep -v -x -E 'orig|want|sub|mal|trunc|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patch16t\.exe|M\.ORG|W\.ORG|fd\.img|xd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch16\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
+    grep -v -x -E 'orig|want|sub|mal|trunc|gitb|gitp|git[bp]\.pat|OGIT[BP]\.TXT|RGIT[BP]\.TXT|nlsteps\.txt|CRNL\.TXT|[A-Z]{2}[UCN]\.TXT|[a-z]{2}[ucn]\.(txt|pat)|crnl\.pat|patcht\.exe|M\.ORG|W\.ORG|fd\.img|xd\.img|full\.txt|DL\.TXT|UD\.TXT|MX\.TXT|EM\.TXT|WS\.TXT|DF\.TXT|DC\.TXT|ed\.pat|HUGE\.TXT|LONG\.TXT|huge\.txt|long\.txt|X10[0-9]+\.TXT|WIDE\.TXT|over\.txt|[a-z0-9]+\.pat|[A-Z]\.C|[A-Z]\.(ORG|OR1|REJ|RE[12])|BIG\.TXT|CRLF\.TXT|[a-z]+\.pat|C\.RE1|stale\.txt|got\.txt|want\.txt|patch\.exe|rc\.bat|steps\.bat|dosbox\.log|[a-z]+\.c|big\.txt|crlf\.txt')
 if [ -z "$leftover" ]; then ok; else not_ok "files left behind:" $leftover; fi
 
 # ------------------------------------------------------------------

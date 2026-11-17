@@ -33,7 +33,7 @@ printf '@ECHO OFF\r\nPATH A:\\\r\nECHO PATCH16-GRDOS-BEGIN>AUX\r\nCTTY AUX\r\nB:
     > "$out/AUTOEXEC.BAT"
 mcopy -o -i "$out/a.img" "$out/AUTOEXEC.BAT" ::AUTOEXEC.BAT
 # As GR-DOS installs it (its scripts/deploy-cf): the floppy has no
-# CONFIG.SYS, and DOS's FILES=8 is too few for patch16 with its output
+# CONFIG.SYS, and DOS's FILES=8 is too few for PATCH with its output
 # redirected (docs/PORT-FEASIBILITY.md, section 9).
 printf 'FILES=20\r\nBUFFERS=20\r\n' > "$out/CONFIG.SYS"
 mcopy -o -i "$out/a.img" "$out/CONFIG.SYS" ::CONFIG.SYS

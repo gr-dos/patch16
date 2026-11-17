@@ -128,7 +128,7 @@ That is 4 bytes of disk per line, constant RAM, no `maxlen` padding, and `ifetch
 
 Done as §4.1 and §4.4 recommend: hunk headers are checked and hunks capped at 15,992 lines, patch lines at 16,383 bytes and input lines at 32,000 bytes; the line index holds 1,024 offsets per block (two cached, the rest in a temporary file) and reads text through two 8 KB windows.
 
-`patch16.exe` 0.01 is 49,098 bytes. Free conventional memory each patch needed under DOSBox-X (8086), found by reserving memory with `LOADFIX` ahead of `patch16` (604 KB free without it):
+The executable 0.01, then `patch16.exe` and now `patch.exe` (`PATCH`), was 49,098 bytes. Free conventional memory each patch needed under DOSBox-X (8086), found by reserving memory with `LOADFIX` ahead of it (604 KB free without it):
 
 | Patch | Needs |
 |---|---|
