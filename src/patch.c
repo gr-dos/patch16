@@ -291,7 +291,8 @@ char **argv;
 		    say ("Hunk #%d ignored at %ld.\n", hunk, newwhere);
 	    }
 	    else if (!where
-		     || (where == 1 && ok_to_create_file && input_lines)) {
+		     || (where == 1 && ok_to_create_file && input_lines
+			 && pch_creates_file ())) {	/* patch16 */
 		if (where)
 		  say ("\nPatch attempted to create file `%s', which already exists.\n", inname);
 		abort_hunk();

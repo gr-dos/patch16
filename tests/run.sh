@@ -256,6 +256,10 @@ printf 'a\nb\n' > v.c
 printf 'a\nb\n' > w.c
 printf -- '--- a/v.c\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-a\n-c\n' > v.pat
 printf -- '--- a/w.c\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-a\n-b\n' > w.pat
+# a patch that creates a file (--- /dev/null) fails on one that exists;
+# a hunk at line 0 that does not say so inserts at the top (diff -U0)
+printf 'x\n' > y.c
+printf -- '--- /dev/null\n+++ b/y.c\n@@ -0,0 +1 @@\n+new\n' > y.pat
 printf 'first\n#ifndef X\nsecond\n#else\nSECOND\n#endif /* X */\nthird\n' > want/dc.txt
 
 cat > rc.bat <<'EOF'
@@ -399,6 +403,8 @@ patch16 -f -p1 -i v.pat >o56.txt
 call rc 56
 patch16 -b -p1 -i w.pat >o57.txt
 call rc 57
+patch16 -p1 -i y.pat >o58.txt
+call rc 58
 if not exist patch16t.exe goto nobreak
 rem --- Ctrl-Break: while applying it cleans up and exits 2; between the
 rem --- renames that install the file it is ignored
@@ -713,6 +719,12 @@ rc 57 0
 absent "step 57: deleted" w.c
 absent "step 57: deleted" W.C
 same "step 57: the original kept as the backup" W.ORG want/vw.c
+rc 58 1
+printf 'x\n' > want/y.c
+same "step 58: not created over an existing file" Y.C want/y.c
+if tr -d '\r' < O58.TXT | grep -q 'attempted to create file'; then ok; else
+    not_ok "step 58: no message"; tr -d '\r' < O58.TXT | sed 's/^/    /'
+fi
 
 while read -r n f; do
     rc $n 0

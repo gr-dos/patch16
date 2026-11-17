@@ -150,10 +150,10 @@ EOF
 
 # applied at an offset: the file has 7 more lines at the top
 case_15() {
-    lines 30 > a/O.TXT; lines 30 | sed 's/^line 20$/line twenty/' > b/O.TXT
+    lines 30 > a/OFS.TXT; lines 30 | sed 's/^line 20$/line twenty/' > b/OFS.TXT
     mkdir t w
-    { lines 7 extra; cat a/O.TXT; } > t/O.TXT
-    { lines 7 extra; cat b/O.TXT; } > w/O.TXT
+    { lines 7 extra; cat a/OFS.TXT; } > t/OFS.TXT
+    { lines 7 extra; cat b/OFS.TXT; } > w/OFS.TXT
 }
 
 # lines that look like diff syntax
@@ -287,6 +287,9 @@ EOF
         ws=$dir/ws/$c
         rm -rf "$ws"; mkdir -p "$ws/a" "$ws/b"
         (cd "$ws" && "case_$c") || { echo "case $c failed" >&2; return 1; }
+        if (cd "$ws" && find a b -name P.PAT -o -name O.TXT -o -name R.TXT) | grep -q .; then
+            echo "case $c: P.PAT, O.TXT and R.TXT are the run's own" >&2; return 1
+        fi
         [ -d "$ws/t" ] || cp -r "$ws/a" "$ws/t"
         [ -d "$ws/w" ] || cp -r "$ws/b" "$ws/w"
         for p in $PRODUCERS; do
