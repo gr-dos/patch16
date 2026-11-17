@@ -2,7 +2,8 @@
 #
 # Run a DOS disk's RUN.BAT on GR-DOS, in QEMU: boot a copy of the pinned
 # GR-DOS floppy (scripts/fetch-grdos) in A:, with an AUTOEXEC.BAT that
-# runs B:\RUN.BAT, and the files of DIR on a new 1.44 MB floppy in B:.
+# runs B:\RUN.BAT and a CONFIG.SYS with FILES=20, and the files of DIR on
+# a new 1.44 MB floppy in B:.
 # AUTOEXEC.BAT reports to COM1 (OUT/serial.log) when it starts and ends,
 # and CTTY AUX sends the console there in between, so that what programs
 # write to standard error is kept; QEMU is stopped at the end, or after
@@ -31,6 +32,11 @@ chmod u+w "$out/a.img"
 printf '@ECHO OFF\r\nPATH A:\\\r\nECHO PATCH16-GRDOS-BEGIN>AUX\r\nCTTY AUX\r\nB:\r\nCALL RUN.BAT\r\nA:\r\nECHO PATCH16-GRDOS-END\r\n' \
     > "$out/AUTOEXEC.BAT"
 mcopy -o -i "$out/a.img" "$out/AUTOEXEC.BAT" ::AUTOEXEC.BAT
+# As GR-DOS installs it (its scripts/deploy-cf): the floppy has no
+# CONFIG.SYS, and DOS's FILES=8 is too few for patch16 with its output
+# redirected (docs/PORT-FEASIBILITY.md, section 9).
+printf 'FILES=20\r\nBUFFERS=20\r\n' > "$out/CONFIG.SYS"
+mcopy -o -i "$out/a.img" "$out/CONFIG.SYS" ::CONFIG.SYS
 
 mformat -C -f 1440 -i "$out/b.img" ::
 for f in "$dir"/*; do
