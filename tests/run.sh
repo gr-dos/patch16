@@ -489,13 +489,13 @@ if command -v git >/dev/null; then
     (
         cd repo && git init -q &&
         printf 'one\ntwo\nthree\n' > t1.c &&
-        head -c 300 /dev/urandom > img.bin &&
+        printf 'IMG\000\001\002\003old\377\n' > img.bin &&
         seq 1 20 > r_old.c && seq 100 130 > m_old.c && seq 200 230 > c_src.c &&
         printf 'echo hi\n' > x.sh && printf 'echo hi\n' > e.sh &&
         printf 'gone\nsoon\n' > d.c &&
         git add . && git -c user.email=t@t -c user.name=t commit -q -m 1 &&
         printf 'one\nTWO\nthree\n' > t1.c &&
-        head -c 300 /dev/urandom > img.bin &&
+        printf 'IMG\000\001\002\003new\377\n' > img.bin &&
         git mv r_old.c r_new.c && git mv m_old.c m_new.c &&
         sed -i 's/^115$/one hundred fifteen/' m_new.c &&
         cp c_src.c c_dst.c && chmod +x x.sh && chmod +x e.sh &&
