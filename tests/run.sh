@@ -192,7 +192,8 @@ fi
 # partial reject, the original put back.
 #   xn.pat  makes the new file A:\XN.TXT (75 KB)
 #   xb.pat  patches A:\XB.TXT (the new version is 75 KB)
-#   xr.pat  fails every hunk on xr.txt; its 70 KB reject goes to A:,
+#   xr.pat  fails its one hunk (1500 lines changed) on xr.txt; its
+#           90 KB reject goes to A:,
 #           as XR.RE1 since XR.REJ exists
 xfull=0
 if command -v mformat >/dev/null && command -v mcopy >/dev/null &&
@@ -203,7 +204,7 @@ if command -v mformat >/dev/null && command -v mcopy >/dev/null &&
     sed 's#big\.txt#xb.txt#g' big.pat > xb.pat
     awk 'BEGIN { for (i = 1; i <= 3000; i++) printf "row %d of the original\n", i }' \
         > orig/xr.txt
-    awk '{ if (NR % 10 == 0) print "changed " $0; else print }' orig/xr.txt > want/xr.txt
+    awk '{ if (NR <= 1500) print "changed " $0; else print }' orig/xr.txt > want/xr.txt
     udiff xr.txt > xr.pat
     awk '{ print "other " $0 }' orig/xr.txt > xr.txt
     printf 'keep\r\n' > XR.REJ
